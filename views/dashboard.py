@@ -3,6 +3,9 @@ from sqlalchemy import func, select
 
 from core.db import session_scope
 from core.models import Account, User
+from core.models.documents import PENDING
+from core.services import approval
+from core.services.notifications import unread_count
 from core.services.settings import get_settings
 from ui.common import guard, page_header
 
@@ -18,6 +21,11 @@ def render() -> None:
     c1.metric("الحسابات النشطة", n_accounts)
     c2.metric("المستخدمون النشطون", n_users)
     c3.metric("طريقة تقييم المخزون", "المتوسط المرجح")
+    c4, c5, _ = st.columns(3)
+    if user.can("approvals"):
+        pending = approval.documents_frame((PENDING,))
+        c4.metric("مستندات في انتظار الاعتماد", len(pending))
+    c5.metric("إشعارات غير مقروءة", unread_count(user.id))
     st.divider()
     st.markdown(
         """

@@ -1,5 +1,5 @@
 """Shared Streamlit helpers: RTL styling, access guards, export and import widgets."""
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -83,7 +83,7 @@ def export_buttons(df: pd.DataFrame, title: str, screen_key: str, file_stem: str
     with c1:
         st.download_button(
             "⬇️ Excel",
-            data=lambda: to_excel(df, title, settings, subtitle=subtitle, printed_by=user.full_name),
+            data=lambda: to_excel(df, title, settings, subtitle=subtitle, printed_by=user.full_name, totals=totals),
             file_name=f"{file_stem}_{stamp}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=f"xl_{screen_key}_{file_stem}",
@@ -134,6 +134,57 @@ def import_section(screen_key: str, template: pd.DataFrame, template_name: str,
         if count:
             flash(f"تم استيراد {count} صف")
             st.rerun()
+
+
+def account_options(postable_only: bool = True, include_inactive: bool = False) -> dict[int, str]:
+    """{account id: "code - name"} in code order, for select boxes."""
+    from sqlalchemy import select
+
+    from core.db import session_scope
+    from core.models import Account
+
+    with session_scope() as s:
+        q = select(Account).order_by(Account.code)
+        if postable_only:
+            q = q.where(Account.is_postable)
+        if not include_inactive:
+            q = q.where(Account.is_active)
+        return {a.id: f"{a.code} - {a.name_ar}" for a in s.scalars(q)}
+
+
+def fiscal_year_bounds(today: date | None = None) -> tuple[date, date]:
+    """Start and end of the fiscal year containing `today`, per the company settings."""
+    today = today or date.today()
+    m = get_settings().fiscal_year_start_month or 1
+    start_year = today.year if today.month >= m else today.year - 1
+    start = date(start_year, m, 1)
+    end = date(start_year + 1, m, 1) if m > 1 else date(start_year + 1, 1, 1)
+    return start, end - timedelta(days=1)
+
+
+def date_range(key: str, default: tuple[date, date] | None = None) -> tuple[date, date]:
+    start, end = default or fiscal_year_bounds()
+    c1, c2 = st.columns(2)
+    d1 = c1.date_input("من تاريخ", value=start, key=f"{key}_from", format="YYYY-MM-DD")
+    d2 = c2.date_input("إلى تاريخ", value=end, key=f"{key}_to", format="YYYY-MM-DD")
+    return d1, d2
+
+
+def select_all_editor(df: pd.DataFrame, key: str, height: int | str = "auto",
+                      column_config: dict | None = None) -> list:
+    """A read-only table with a tick column and a 'select all' box. Returns the selected index labels."""
+    if df.empty:
+        st.info("لا توجد بيانات")
+        return []
+    all_on = st.checkbox("تحديد الكل", key=f"{key}_all")
+    view = df.copy()
+    view.insert(0, "تحديد", all_on)
+    # The editor key changes with the select-all box so ticking it resets every row.
+    edited = st.data_editor(
+        view, key=f"{key}_ed_{int(all_on)}", hide_index=True, width="stretch", height=height,
+        disabled=[c for c in view.columns if c != "تحديد"], column_config=column_config,
+    )
+    return list(edited.index[edited["تحديد"]])
 
 
 def _read_template(uploaded, columns: list[str]) -> pd.DataFrame:

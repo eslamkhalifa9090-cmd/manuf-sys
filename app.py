@@ -4,16 +4,26 @@ import streamlit as st
 from core.bootstrap import init_db
 from core.screens import SCREENS
 from core.security import has_any_user, reload_user
+from core.services.notifications import unread_count
 from core.services.settings import get_settings
 from ui.common import inject_css, show_flash
-from views import accounts, audit_log, auth, company_settings, dashboard, roles, system, users
+from views import (accounts, approvals, audit_log, auth, cash_vouchers, company_settings, dashboard, journal_book,
+                   ledger, manual_journals, notifications, periods, roles, system, trial_balance, users)
 
 st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide")
 inject_css()
 
 VIEWS = {
     "dashboard": dashboard.render,
+    "notifications": notifications.render,
+    "approvals": approvals.render,
     "accounts": accounts.render,
+    "manual_journals": manual_journals.render,
+    "cash_vouchers": cash_vouchers.render,
+    "journal_book": journal_book.render,
+    "ledger": ledger.render,
+    "trial_balance": trial_balance.render,
+    "periods": periods.render,
     "company_settings": company_settings.render,
     "users": users.render,
     "roles": roles.render,
@@ -36,6 +46,9 @@ def _sidebar(user) -> None:
         st.markdown(f"### {settings.name_ar}")
         role = "Master Admin" if user.is_master else ""
         st.caption(f"👤 {user.full_name} {('· ' + role) if role else ''}")
+        unread = unread_count(user.id)
+        if unread:
+            st.warning(f"🔔 عندك {unread} إشعار جديد — افتح شاشة الإشعارات")
         c1, c2 = st.columns(2)
         if c1.button("كلمة المرور", width="stretch"):
             auth.change_password_dialog(user)
@@ -74,7 +87,7 @@ def main() -> None:
     if not groups:
         st.warning("لا توجد شاشات مسموح لك بها. تواصل مع مدير النظام.")
         return
-    st.navigation(groups).run()
+    st.navigation(groups, expanded=True).run()
 
 
 main()

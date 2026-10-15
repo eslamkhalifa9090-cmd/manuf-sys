@@ -46,7 +46,10 @@ class CurrentUser:
         screen = BY_KEY.get(screen_key)
         if screen is None or action not in screen.actions:
             return False
-        if self.is_master:
+        if action == "own_only":
+            # A restriction, not a right: the master is never restricted.
+            return not self.is_master and action in self.perms.get(screen_key, set())
+        if self.is_master or (screen.public and action == "view"):
             return True
         if screen.master_only:
             return False

@@ -18,14 +18,29 @@ class Screen:
     icon: str = ":material/description:"
     # Master-only screens are never granted through roles.
     master_only: bool = False
+    # Public screens are open to every signed-in user and stay out of the permission matrix.
+    public: bool = False
 
 
 ALL = ACTIONS
 CRUD_IO = ("view", "add", "edit", "delete", "export", "import")
+# Documents that go through approval; own_only limits a user to the documents they created.
+DOC_ACTIONS = ("view", "add", "edit", "delete", "export", "own_only")
+REPORT = ("view", "export")
 
 SCREENS: list[Screen] = [
     Screen("dashboard", "الرئيسية", "عام", ("view",), ":material/home:"),
+    Screen("notifications", "الإشعارات والملاحظات", "عام", ("view",), ":material/notifications:", public=True),
+    Screen("approvals", "الاعتمادات", "عام", ("view", "approve", "unapprove", "export"),
+           ":material/task_alt:"),
     Screen("accounts", "شجرة الحسابات", "الحسابات العامة", CRUD_IO, ":material/account_tree:"),
+    Screen("manual_journals", "قيود اليومية والأرصدة الافتتاحية", "الحسابات العامة", DOC_ACTIONS + ("import",),
+           ":material/edit_note:"),
+    Screen("cash_vouchers", "سندات القبض والصرف", "الحسابات العامة", DOC_ACTIONS, ":material/payments:"),
+    Screen("journal_book", "دفتر اليومية", "الحسابات العامة", REPORT, ":material/menu_book:"),
+    Screen("ledger", "كشف حساب", "الحسابات العامة", REPORT, ":material/receipt_long:"),
+    Screen("trial_balance", "ميزان المراجعة", "الحسابات العامة", REPORT, ":material/balance:"),
+    Screen("periods", "الفترات المحاسبية", "الحسابات العامة", ("view", "edit"), ":material/event_available:"),
     Screen("company_settings", "بيانات المنشأة والإعدادات", "الإعدادات", ("view", "edit"), ":material/settings:"),
     Screen("users", "المستخدمون", "الإعدادات", ("view", "add", "edit", "delete", "export"), ":material/group:"),
     Screen("roles", "الأدوار والصلاحيات", "الإعدادات", ("view", "add", "edit", "delete"), ":material/admin_panel_settings:"),
