@@ -9,3 +9,4 @@ from core.models.notifications import Notification  # noqa: F401
 from core.models.inventory import (  # noqa: F401
     Item, ItemGroup, PurchaseInvoice, PurchaseLine, StockMove, StockVoucher, StockVoucherLine,
 )
+from core.models.costing import Bom, BomLine, CostRate, PriceQuote, PriceQuoteLine  # noqa: F401

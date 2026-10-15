@@ -43,12 +43,19 @@ def _form(user, item: dict | None, key: str) -> None:
         unit = c4.selectbox("الوحدة", units, index=units.index(v["الوحدة"]) if v.get("الوحدة") in units else 0,
                             accept_new_options=True)
         min_qty = c5.number_input("حد الطلب", min_value=0.0, value=float(v.get("حد الطلب") or 0))
-        family = st.text_input("البند / العائلة (للتجميع في التقارير)", value=v.get("البند / العائلة", ""))
+        c6, c7, c8 = st.columns(3)
+        ppu = c6.number_input("عدد القطع في الوحدة", min_value=0.001, value=float(v.get("قطع في الوحدة") or 1),
+                              help="الجوز = 2. السعر بيظهر للقطعة وللوحدة وللكيلو")
+        w = v.get("وزن القطعة (جم)")
+        weight = c7.number_input("وزن القطعة بالجرام (اختياري)", min_value=0.0,
+                                 value=float(w) if w is not None and w == w else 0.0,
+                                 help="لو فاضي (صفر) بيتحسب من التركيبة أوتوماتيك")
+        family = c8.text_input("البند / العائلة (للتجميع في التقارير)", value=v.get("البند / العائلة", ""))
         notes = st.text_input("ملاحظات", value=v.get("ملاحظات", ""))
         active = st.checkbox("نشط", value=v.get("نشط", True)) if item else True
         if st.form_submit_button("حفظ", type="primary"):
             if run_action(svc.save_item, user, v.get("id"), name, gid, unit, code, family, min_qty, notes, active,
-                          success="تم الحفظ"):
+                          ppu, weight or None, success="تم الحفظ"):
                 st.rerun()
 
 

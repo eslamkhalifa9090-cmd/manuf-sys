@@ -42,6 +42,10 @@ class Item(Base):
     unit: Mapped[str] = mapped_column(String(20), default="عدد")
     family: Mapped[str | None] = mapped_column(String(100))
     min_qty: Mapped[float] = mapped_column(Qty, default=0)
+    # Pieces in one unit of the item (a pair = 2); prices show per piece, per unit and per kilo.
+    pieces_per_unit: Mapped[float] = mapped_column(Qty, default=1)
+    # Weight of one piece in grams; empty means take it from the BOM.
+    piece_weight_g: Mapped[float | None] = mapped_column(Qty)
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
