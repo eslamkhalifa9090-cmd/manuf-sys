@@ -140,3 +140,10 @@ def test_opening_permission_is_separate(master):
     assert stock_vouchers.vouchers_frame(master).empty
     with pytest.raises(BusinessError):
         journals.delete_journal(journals_only, res["journal_id"])
+
+
+def test_values_longer_than_the_columns_are_rejected(master):
+    f = frames(parties=[["عميل", "عميل", None, None, "0" * 61, ""]], stock=[["", "س" * 151, "خامات", "كيلو", 1, 1]])
+    p = opening.plan(f, AS_OF)
+    assert p.checked["parties"]["الحالة"].iloc[0] == "التليفون أطول من 60 حرف"
+    assert p.checked["stock"]["الحالة"].iloc[0] == "اسم الصنف أطول من 150 حرف"
