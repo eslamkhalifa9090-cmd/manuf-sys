@@ -92,3 +92,14 @@ def test_view_mode_is_remembered_per_user(master):
     import pytest
     with pytest.raises(BusinessError):
         users.set_view_mode(master.id, "tablet")
+
+
+def test_footer_is_master_only(master):
+    from dataclasses import replace
+
+    editor = replace(master, is_master=False, perms={"company_settings": {"view", "edit"}})
+    with pytest.raises(BusinessError):
+        settings_svc.update_settings(editor, {"footer_text": "فوتر"})
+    settings_svc.update_settings(editor, {"signature_labels": "المحاسب"})
+    settings_svc.update_settings(master, {"footer_text": "فوتر"})
+    assert settings_svc.get_settings().footer_text == "فوتر"

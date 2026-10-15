@@ -14,7 +14,13 @@ from core.services.errors import BusinessError
 from core.services.periods import ensure_open
 
 SCREEN = "manual_journals"
+# Opening balances have their own screen and permissions, apart from day-to-day journals.
+OPENING_SCREEN = "opening_balances"
 LINE_COLUMNS = ["كود الحساب", "مدين", "دائن", "البيان", "العميل / المورد"]
+
+
+def screen_for(kind: str) -> str:
+    return OPENING_SCREEN if kind == JOURNAL_OPENING else SCREEN
 
 
 def _opening_equity(session) -> Account:
@@ -58,13 +64,15 @@ def save_journal(actor, journal_id: int | None, doc_date: date, memo: str, kind:
         raise BusinessError("التاريخ مطلوب")
     with session_scope() as s:
         if journal_id is None:
-            check_access(actor, SCREEN, "add")
+            check_access(actor, screen_for(kind), "add")
             doc = ManualJournal(created_by_id=actor.id)
         else:
             doc = s.get(ManualJournal, journal_id)
             if doc is None:
                 raise BusinessError("القيد غير موجود")
-            check_access(actor, SCREEN, "edit", doc)
+            check_access(actor, screen_for(doc.kind), "edit", doc)
+            if kind != doc.kind:
+                check_access(actor, screen_for(kind), "add")
             check_editable(doc)
             resubmit(doc)
         ensure_open(s, doc_date)
@@ -87,7 +95,7 @@ def delete_journal(actor, journal_id: int) -> None:
         doc = s.get(ManualJournal, journal_id)
         if doc is None:
             return
-        check_access(actor, SCREEN, "delete", doc)
+        check_access(actor, screen_for(doc.kind), "delete", doc)
         check_editable(doc)
         audit.log(s, actor, "delete", "manual_journal", doc.id, {"doc_no": doc.doc_no})
         s.delete(doc)
@@ -107,13 +115,12 @@ def get_journal(journal_id: int) -> dict:
         }
 
 
-def journals_frame(actor, kind: str | None = None) -> pd.DataFrame:
+def journals_frame(actor, kind: str = JOURNAL_REGULAR) -> pd.DataFrame:
     with session_scope() as s:
         names = dict(s.execute(select(User.id, User.full_name)).all())
-        q = select(ManualJournal).order_by(ManualJournal.doc_date.desc(), ManualJournal.id.desc())
-        if kind:
-            q = q.where(ManualJournal.kind == kind)
-        if own_only(actor, SCREEN):
+        q = (select(ManualJournal).where(ManualJournal.kind == kind)
+             .order_by(ManualJournal.doc_date.desc(), ManualJournal.id.desc()))
+        if own_only(actor, screen_for(kind)):
             q = q.where(ManualJournal.created_by_id == actor.id)
         rows = [{
             "id": d.id, "رقم القيد": d.doc_no, "التاريخ": d.doc_date, "النوع": JOURNAL_KINDS[d.kind],

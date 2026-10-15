@@ -29,6 +29,7 @@ h1, h2, h3 { color: #1F4E79; }
 [data-testid="stSidebar"][data-collapsed="true"], [data-testid="stSidebar"][data-collapsed="true"] * {
     visibility: hidden !important;
 }
+.app-footer{margin-top:3rem;padding-top:.75rem;border-top:1px solid rgba(128,128,128,.3);text-align:center;font-size:.85rem;opacity:.75;direction:rtl}
 </style>
 """
 
@@ -107,6 +108,17 @@ def page_header(title: str, caption: str | None = None) -> None:
 def flash(message: str, kind: str = "success") -> None:
     """Queue a message that survives the next rerun."""
     st.session_state.setdefault("_flash", []).append((kind, message))
+
+
+def show_footer() -> None:
+    """The company footer under every screen, the same text printed on reports."""
+    import html
+
+    text = (get_settings().footer_text or "").strip()
+    if not text:
+        return
+    lines = "<br>".join(html.escape(l) for l in text.splitlines() if l.strip())
+    st.markdown(f'<div class="app-footer">{lines}</div>', unsafe_allow_html=True)
 
 
 def show_flash() -> None:

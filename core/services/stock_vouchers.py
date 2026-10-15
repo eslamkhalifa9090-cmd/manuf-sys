@@ -12,9 +12,15 @@ from core.services import approval, audit, stock
 from core.services.approval import PostingLine, r2
 from core.services.doc_rules import check_access, check_editable, own_only, resubmit, status_label
 from core.services.errors import BusinessError
+from core.services.journals import OPENING_SCREEN
 from core.services.periods import ensure_open
 
 SCREEN = "stock_vouchers"
+
+
+def screen_for(kind: str) -> str:
+    """Opening stock is entered under the opening-balances permission, like the opening journal."""
+    return OPENING_SCREEN if kind == STOCK_OPENING else SCREEN
 LINE_COLUMNS = ["كود الصنف", "اسم الصنف", "الكمية", "سعر الوحدة"]
 MOVE_KIND_LABELS = STOCK_KINDS | {"purchase": "مشتريات", "purchase_return": "مرتجع مشتريات", "sale": "مبيعات",
                                   "sale_return": "مرتجع مبيعات", "production_issue": "صرف للإنتاج",
@@ -68,13 +74,15 @@ def save_voucher(actor, voucher_id: int | None, kind: str, doc_date: date, lines
         if not clean:
             raise BusinessError("الإذن لازم يكون فيه صنف واحد على الأقل")
         if voucher_id is None:
-            check_access(actor, SCREEN, "add")
+            check_access(actor, screen_for(kind), "add")
             doc = StockVoucher(created_by_id=actor.id)
         else:
             doc = s.get(StockVoucher, voucher_id)
             if doc is None:
                 raise BusinessError("الإذن غير موجود")
-            check_access(actor, SCREEN, "edit", doc)
+            check_access(actor, screen_for(doc.kind), "edit", doc)
+            if kind != doc.kind:
+                check_access(actor, screen_for(kind), "add")
             check_editable(doc)
             resubmit(doc)
         ensure_open(s, doc_date)
@@ -92,7 +100,7 @@ def delete_voucher(actor, voucher_id: int) -> None:
         doc = s.get(StockVoucher, voucher_id)
         if doc is None:
             return
-        check_access(actor, SCREEN, "delete", doc)
+        check_access(actor, screen_for(doc.kind), "delete", doc)
         check_editable(doc)
         audit.log(s, actor, "delete", "stock_voucher", doc.id, {"doc_no": doc.doc_no})
         s.delete(doc)
@@ -111,13 +119,13 @@ def get_voucher(voucher_id: int) -> dict:
 
 
 def vouchers_frame(actor, kind: str | None = None) -> pd.DataFrame:
+    """kind None lists every kind but opening stock, which lives on the opening-balances screen."""
     with session_scope() as s:
         names = dict(s.execute(select(User.id, User.full_name)).all())
         parties = {p.id: p.name for p in s.scalars(select(Party))}
         q = select(StockVoucher).order_by(StockVoucher.doc_date.desc(), StockVoucher.id.desc())
-        if kind:
-            q = q.where(StockVoucher.kind == kind)
-        if own_only(actor, SCREEN):
+        q = q.where(StockVoucher.kind == kind) if kind else q.where(StockVoucher.kind != STOCK_OPENING)
+        if own_only(actor, screen_for(kind)):
             q = q.where(StockVoucher.created_by_id == actor.id)
         rows = [{"id": d.id, "رقم الإذن": d.doc_no, "التاريخ": d.doc_date, "النوع": STOCK_KINDS[d.kind],
                  "الجهة": parties.get(d.party_id, ""), "عدد الأصناف": len(d.lines), "البيان": d.memo or "",

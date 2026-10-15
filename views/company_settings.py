@@ -45,11 +45,12 @@ def render() -> None:
 
     with tab_reports:
         with st.form("reports"):
+            footer = st.text_area(
+                "نص الفوتر (يظهر تحت كل شاشة، وأسفل كل صفحة PDF وتحت كل ملف Excel)", st_.footer_text or "",
+                height=100, disabled=not user.is_master,
+                help="ممكن أكتر من سطر. تعديله لمستخدم الماستر بس." if user.is_master else "تعديل الفوتر لمستخدم الماستر بس.",
+            )
             values = {
-                "footer_text": st.text_area(
-                    "نص الفوتر (يظهر أسفل كل صفحة PDF وتحت كل ملف Excel)", st_.footer_text or "", height=100,
-                    help="ممكن أكتر من سطر",
-                ),
                 "signature_labels": st.text_input(
                     "خانات التوقيع في آخر التقرير (افصل بينها بفاصلة)", st_.signature_labels or "",
                     help="مثال: المحاسب,المراجع,المدير. سيبها فاضية لو مش عايز توقيعات.",
@@ -58,6 +59,8 @@ def render() -> None:
                 "show_print_date": st.checkbox("إظهار تاريخ الطباعة", st_.show_print_date),
                 "show_printed_by": st.checkbox("إظهار اسم من قام بالطباعة", st_.show_printed_by),
             }
+            if user.is_master:
+                values["footer_text"] = footer
             if st.form_submit_button("حفظ", type="primary", disabled=not can_edit):
                 if run_action(svc.update_settings, user, values, success="تم حفظ إعدادات التقارير"):
                     st.rerun()

@@ -1,4 +1,4 @@
-"""Stock vouchers: opening stock, gifts and samples, issues, and stock-count adjustments."""
+"""Stock vouchers: gifts and samples, issues, and stock-count adjustments. Opening stock has its own screen."""
 from datetime import date
 
 import pandas as pd
@@ -74,56 +74,61 @@ def _form(user, v: dict | None, kind: str, key: str) -> None:
             st.rerun()
 
 
-def _list_tab(user) -> None:
-    kinds = {"الكل": None} | {v: k for k, v in STOCK_KINDS.items()}
-    kind = kinds[st.selectbox("النوع", list(kinds), key="sv_kind")]
+DAILY_KINDS = [k for k in STOCK_KINDS if k != STOCK_OPENING]
+
+
+def _list_tab(user, kind: str | None = None, screen: str = SCREEN, prefix: str = "sv") -> None:
+    if kind is None:
+        kinds = {"الكل": None} | {STOCK_KINDS[k]: k for k in DAILY_KINDS}
+        kind = kinds[st.selectbox("النوع", list(kinds), key="sv_kind")]
     df = svc.vouchers_frame(user, kind)
     if df.empty:
         st.info("لا توجد أذون")
         return
     st.dataframe(df.drop(columns=["id"]), hide_index=True, width="stretch")
-    export_buttons(df.drop(columns=["id"]), "أذون المخزن", SCREEN, "stock_vouchers")
+    title = "أذون المخزن الافتتاحية" if kind == STOCK_OPENING else "أذون المخزن"
+    export_buttons(df.drop(columns=["id"]), title, screen, f"stock_vouchers_{kind or 'all'}")
     open_docs = df[df["الحالة"].isin(EDITABLE)]
-    if open_docs.empty or not (user.can(SCREEN, "edit") or user.can(SCREEN, "delete")):
+    if open_docs.empty or not (user.can(screen, "edit") or user.can(screen, "delete")):
         return
     st.divider()
     st.subheader("تعديل أو حذف إذن لم يُعتمد")
     labels = {int(r["id"]): f"{r['رقم الإذن']} - {r['النوع']} ({r['الحالة']})" for _, r in open_docs.iterrows()}
-    doc_id = st.selectbox("الإذن", list(labels), format_func=labels.get, key="sv_pick")
+    doc_id = st.selectbox("الإذن", list(labels), format_func=labels.get, key=f"{prefix}_pick")
     v = svc.get_voucher(doc_id)
     if v["rejection_note"]:
         st.warning(f"ملاحظة المراجع: {v['rejection_note']}")
-    if user.can(SCREEN, "edit"):
-        _form(user, v, v["kind"], f"sv_edit_{doc_id}")
-    if user.can(SCREEN, "delete"):
+    if user.can(screen, "edit"):
+        _form(user, v, v["kind"], f"{prefix}_edit_{doc_id}")
+    if user.can(screen, "delete"):
         with st.expander("حذف الإذن"):
-            if st.button("تأكيد الحذف", key=f"sv_del_{doc_id}"):
+            if st.button("تأكيد الحذف", key=f"{prefix}_del_{doc_id}"):
                 if run_action(svc.delete_voucher, user, doc_id, success="تم الحذف"):
                     st.rerun()
 
 
 def _new_tab(user) -> None:
-    kind = st.radio("نوع الإذن", list(STOCK_KINDS), format_func=STOCK_KINDS.get, horizontal=True, key="sv_new_kind")
+    kind = st.radio("نوع الإذن", DAILY_KINDS, format_func=STOCK_KINDS.get, horizontal=True, key="sv_new_kind")
     _form(user, None, kind, f"sv_new_{kind}")
 
 
 def _import_tab(user) -> None:
     c1, c2, c3 = st.columns([1, 1, 2])
-    kinds = [STOCK_OPENING, COUNT_GAIN, "count_loss"]
+    kinds = [COUNT_GAIN, "count_loss"]
     kind = c1.selectbox("نوع الإذن", kinds, format_func=STOCK_KINDS.get, key="sv_imp_kind")
     doc_date = c2.date_input("التاريخ", value=date.today(), key="sv_imp_date", format="YYYY-MM-DD")
-    memo = c3.text_input("البيان", key="sv_imp_memo", value="أرصدة مخزن افتتاحية" if kind == STOCK_OPENING else "جرد")
+    memo = c3.text_input("البيان", key="sv_imp_memo", value="جرد")
     import_section(
-        SCREEN, svc.lines_template(), "أرصدة مخزن", svc.validate_lines_import,
+        SCREEN, svc.lines_template(), "أذون مخزن", svc.validate_lines_import,
         lambda u, df: svc.import_voucher(u, df, kind, doc_date, memo),
         help_text="الملف كله بيتحول لإذن واحد في انتظار الاعتماد. اكتب كود الصنف أو اسمه زي ما هو مسجل، والكمية، "
-                  "وسعر الوحدة (مطلوب في الرصيد الافتتاحي).",
+                  "وسعر الوحدة (اختياري في زيادة الجرد).",
     )
 
 
 def render() -> None:
     user = guard(SCREEN)
-    page_header("أذون المخزن والتسويات", "أرصدة افتتاحية، هدايا وعينات، صرف، وتسويات الجرد — بالمتوسط المرجح")
+    page_header("أذون المخزن والتسويات", "هدايا وعينات، صرف، وتسويات الجرد — بالمتوسط المرجح · المخزون الافتتاحي من شاشة الأرصدة الافتتاحية")
     tabs = ["الأذون"] + (["إذن جديد"] if user.can(SCREEN, "add") else []) + \
         (["استيراد من Excel"] if user.can(SCREEN, "add") and user.can(SCREEN, "import") else [])
     handlers = {"الأذون": _list_tab, "إذن جديد": _new_tab, "استيراد من Excel": _import_tab}
