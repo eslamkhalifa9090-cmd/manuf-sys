@@ -58,6 +58,7 @@ ACCOUNTS = [
     ("1305", "مخزون قطع غيار ومهمات", "Spare parts and supplies", "inv_spares", False),
     ("1306", "مخزون مستلزمات تعبئة", "Packaging materials", "inv_packaging", False),
     ("1307", "مخزون عينات وهدايا واردة", "Samples and gifts received", "inv_samples", False),
+    ("1308", "مخزون اكسسوارات", "Accessories", "inv_accessories", False),
     ("14", "العملاء وأوراق القبض", "Receivables", None, False),
     ("1401", "العملاء", "Customers", "ar", False),
     ("1402", "أوراق القبض", "Notes receivable", "notes_receivable", False),

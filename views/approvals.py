@@ -3,7 +3,7 @@ import streamlit as st
 
 from core.models.documents import APPROVED, PENDING, RETURNED
 from core.services import approval
-from ui.common import date_range, export_buttons, flash, guard, page_header, select_all_editor
+from ui.common import date_range, export_buttons, flash, guard, page_header, run_action, select_all_editor
 
 SCREEN = approval.APPROVAL_SCREEN
 MONEY = st.column_config.NumberColumn(format="%.2f")
@@ -28,7 +28,12 @@ def _preview(df, key: str) -> None:
     with st.expander("معاينة القيد المحاسبي"):
         ref = st.selectbox("المستند", list(labels), format_func=labels.get, key=f"{key}_prev")
         doc_type, doc_id = approval.parse_ref(ref)
-        lines = approval.preview(doc_type, doc_id)
+        lines = run_action(approval.preview, doc_type, doc_id)
+        if lines is None or lines is True:
+            return
+        if lines.empty:
+            st.info("المستند ده مالوش قيد مالي (قيمته صفر) — بيحرك المخزن بس.")
+            return
         st.dataframe(lines, hide_index=True, width="stretch", column_config={"مدين": MONEY, "دائن": MONEY})
         st.caption(f"إجمالي المدين {lines['مدين'].sum():,.2f} — إجمالي الدائن {lines['دائن'].sum():,.2f}")
 

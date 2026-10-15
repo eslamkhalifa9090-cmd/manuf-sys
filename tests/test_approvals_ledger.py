@@ -76,7 +76,7 @@ def test_unbalanced_and_header_accounts_rejected(master):
 
 
 def test_opening_balance_auto_balances_to_equity(master):
-    doc_id = jv(master, [line("cash_main", dr=1000), line("ap", cr=300)], kind="opening", auto=True)
+    doc_id = jv(master, [line("cash_main", dr=1000), line("accrued_wages", cr=300)], kind="opening", auto=True)
     j = journals.get_journal(doc_id)
     assert j["kind"] == "opening" and len(j["lines"]) == 3
     eq = [l for l in j["lines"] if l["account_id"] == acc("opening_balance_equity")][0]
@@ -94,7 +94,7 @@ def test_return_requires_note_and_notifies_creator(master, writer):
     notifications.mark_read(writer.id)
     assert notifications.unread_count(writer.id) == 0
     # Writer fixes it; it goes back to pending.
-    journals.save_journal(writer, doc_id, D, "fixed", "regular", [line("cash_main", dr=50), line("ar", cr=50)])
+    journals.save_journal(writer, doc_id, D, "fixed", "regular", [line("cash_main", dr=50), line("notes_receivable", cr=50)])
     pending = approval.documents_frame(("pending",))
     assert list(pending["ref"]) == [f"manual_journal:{doc_id}"]
 
@@ -114,7 +114,7 @@ def test_permissions(master, writer, clerk):
 def test_cash_vouchers(master):
     capital = acc("capital")
     r = cash.save_voucher(master, None, "receipt", D, acc("cash_main"), capital, 1000, "الشريك")
-    p = cash.save_voucher(master, None, "payment", D, acc("cash_vodafone"), acc("ap"), 250, "مورد")
+    p = cash.save_voucher(master, None, "payment", D, acc("cash_vodafone"), acc("accrued_wages"), 250, "مورد")
     with pytest.raises(BusinessError):
         cash.save_voucher(master, None, "payment", D, capital, acc("ap"), 10)
     done, errors = approval.run_many(approval.approve, master, [("cash_voucher", r), ("cash_voucher", p)])

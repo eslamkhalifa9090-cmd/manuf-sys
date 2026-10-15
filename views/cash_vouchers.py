@@ -4,7 +4,8 @@ from datetime import date
 import streamlit as st
 
 from core.models.documents import PAYMENT, RECEIPT, STATUS_LABELS, VOUCHER_KINDS
-from core.services import cash as svc
+from core.models.parties import CUSTOMER, SUPPLIER
+from core.services import cash as svc, parties
 from ui.common import account_options, export_buttons, guard, page_header, run_action
 
 SCREEN = svc.SCREEN
@@ -26,20 +27,30 @@ def _form(user, voucher: dict | None, kind: str, key: str) -> None:
                                 index=t_ids.index(v["treasury_account_id"]) if v.get("treasury_account_id") in t_ids else 0)
         amount = c3.number_input("المبلغ", min_value=0.0, step=1.0, format="%.2f", value=float(v.get("amount") or 0))
         a_ids = list(accounts)
-        counter_label = "الحساب الدائن (مصدر الفلوس)" if kind == RECEIPT else "الحساب المدين (المصروف أو المورد)"
+        counter_label = ("الحساب الدائن (العملاء أو مصدر الفلوس)" if kind == RECEIPT
+                         else "الحساب المدين (الموردين أو المصروف)")
         counter = st.selectbox(counter_label, a_ids, format_func=accounts.get,
                                index=a_ids.index(v["counter_account_id"]) if v.get("counter_account_id") in a_ids else None,
                                placeholder="اختار الحساب")
-        c4, c5 = st.columns(2)
-        party = c4.text_input("الجهة (عميل / مورد / شخص)", value=v.get("party_name") or "")
-        reference = c5.text_input("المرجع (رقم فاتورة / إيصال)", value=v.get("reference") or "")
-        memo = st.text_input("البيان", value=v.get("memo") or "")
+        c4, c5, c6 = st.columns(3)
+        popts = parties.options(CUSTOMER if kind == RECEIPT else SUPPLIER)
+        pids = list(popts)
+        party_id = c4.selectbox("العميل" if kind == RECEIPT else "المورد", pids, format_func=popts.get,
+                                index=pids.index(v["party_id"]) if v.get("party_id") in pids else None,
+                                placeholder="مطلوب لو الحساب عملاء أو موردين")
+        party = c5.text_input("أو جهة أخرى (اسم حر)", value=v.get("party_name") or "")
+        discount = c6.number_input("خصم مسموح به" if kind == RECEIPT else "خصم مكتسب", min_value=0.0, step=1.0,
+                                   format="%.2f", value=float(v.get("discount") or 0),
+                                   help="بيتسجل بس مع " + ("التحصيل من العملاء" if kind == RECEIPT else "السداد للموردين"))
+        c7, c8 = st.columns(2)
+        reference = c7.text_input("المرجع (رقم فاتورة / إيصال)", value=v.get("reference") or "")
+        memo = c8.text_input("البيان", value=v.get("memo") or "")
         if st.form_submit_button("حفظ وإرسال للاعتماد", type="primary"):
             if counter is None:
                 st.error("اختار الحساب المقابل")
                 return
             if run_action(svc.save_voucher, user, v.get("id"), kind, doc_date, treasury, counter, amount,
-                          party, reference, memo,
+                          party, reference, memo, party_id, discount,
                           success=f"تم حفظ {VOUCHER_KINDS[kind]}. في انتظار الاعتماد."):
                 st.rerun()
 
