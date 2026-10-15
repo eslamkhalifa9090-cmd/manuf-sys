@@ -355,12 +355,18 @@ def reconciliation(as_of: date | None = None) -> pd.DataFrame:
         molds = [m for m in s.scalars(select(Mold)) if m.ownership in AMORTIZED]
         reg_cost = r2(sum(cost_total(s, m, as_of) for m in molds))
         reg_acc = r2(sum(accumulated(s, m, as_of) for m in molds))
-        # Retired molds left the books through their settlement.
+        # Retired molds left the books through their settlement or their sale.
         retired = [m for m in molds if m.status == RETIRED]
         for m in retired:
             settled = s.scalar(select(MoldSettlement.id).where(MoldSettlement.mold_id == m.id, MoldSettlement.retire,
                                                                MoldSettlement.status == APPROVED,
                                                                MoldSettlement.doc_date <= as_of).limit(1))
+            if not settled:
+                from core.models.sales import SALE_INVOICE, SalesInvoice, SalesLine
+
+                settled = s.scalar(select(SalesLine.id).join(SalesInvoice).where(
+                    SalesLine.mold_id == m.id, SalesInvoice.kind == SALE_INVOICE, SalesInvoice.status == APPROVED,
+                    SalesInvoice.doc_date <= as_of).limit(1))
             if settled:
                 reg_cost = r2(reg_cost - cost_total(s, m, as_of))
                 reg_acc = r2(reg_acc - accumulated(s, m, as_of))

@@ -85,7 +85,9 @@ def _footer_lines(settings, printed_by: str | None) -> list[str]:
 
 def to_excel(df: pd.DataFrame, title: str, settings, subtitle: str | None = None,
              printed_by: str | None = None, sheet_name: str = "تقرير", include_footer: bool = True,
-             totals: dict | None = None) -> bytes:
+             totals: dict | None = None, bold_rows: set[int] | None = None) -> bytes:
+    """`bold_rows` holds 0-based positions of rows to print bold and shaded, such as statement subtotals."""
+    bold_rows = bold_rows or set()
     wb = Workbook()
     ws = wb.active
     ws.title = sheet_name[:31]
@@ -140,7 +142,10 @@ def to_excel(df: pd.DataFrame, title: str, settings, subtitle: str | None = None
                 cell.number_format = num_format
             elif isinstance(value, datetime):
                 cell.number_format = "yyyy-mm-dd"
-            if (i - start_row) % 2 == 0:
+            if i - start_row - 1 in bold_rows:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="DDEBF7")
+            elif (i - start_row) % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor=ZEBRA_FILL)
 
     for j, col in enumerate(df.columns, start=1):
@@ -231,8 +236,10 @@ def _make_canvas(settings, printed_by, pagesize):
 
 def to_pdf(df: pd.DataFrame, title: str, settings, subtitle: str | None = None,
            printed_by: str | None = None, landscape_mode: bool | None = None,
-           totals: dict | None = None) -> bytes:
-    """Render a table to PDF. `totals` maps column name -> value for a final bold row."""
+           totals: dict | None = None, bold_rows: set[int] | None = None) -> bytes:
+    """Render a table to PDF. `totals` maps column name -> value for a final bold row;
+    `bold_rows` holds 0-based positions of rows to print bold and shaded."""
+    bold_rows = bold_rows or set()
     _register_fonts()
     if landscape_mode is None:
         landscape_mode = len(df.columns) > 6
@@ -298,9 +305,13 @@ def to_pdf(df: pd.DataFrame, title: str, settings, subtitle: str | None = None,
     numeric = {c: pd.api.types.is_numeric_dtype(df[c]) and not pd.api.types.is_bool_dtype(df[c]) for c in columns}
 
     data = [[_rtl_paragraph(c, head, w - 4) for c, w in zip(columns, widths)]]
-    for _, rec in df[columns].iterrows():
+    cell_bold = ParagraphStyle("cellb", parent=cell, fontName=FONT_BOLD)
+    num_bold = ParagraphStyle("numb", parent=num, fontName=FONT_BOLD)
+    for pos, (_, rec) in enumerate(df[columns].iterrows()):
+        strong = pos in bold_rows
         data.append([
-            _rtl_paragraph(format_value(rec[c], decimals), num if numeric[c] else cell, w - 4)
+            _rtl_paragraph(format_value(rec[c], decimals),
+                           (num_bold if strong else num) if numeric[c] else (cell_bold if strong else cell), w - 4)
             for c, w in zip(columns, widths)
         ])
     if totals:
@@ -325,6 +336,9 @@ def to_pdf(df: pd.DataFrame, title: str, settings, subtitle: str | None = None,
     ]
     for r in range(2, len(data), 2):
         style.append(("BACKGROUND", (0, r), (-1, r), colors.HexColor("#" + ZEBRA_FILL)))
+    for pos in bold_rows:
+        if pos < len(df):
+            style.append(("BACKGROUND", (0, pos + 1), (-1, pos + 1), colors.HexColor("#DDEBF7")))
     if totals:
         style.append(("BACKGROUND", (0, len(data) - 1), (-1, len(data) - 1), colors.HexColor("#D9E2EC")))
     table.setStyle(TableStyle(style))

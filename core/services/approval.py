@@ -54,7 +54,7 @@ def register(doc_type: DocType) -> None:
 
 
 def r2(x) -> float:
-    return round(float(x or 0) + 0.0, 2)
+    return round(float(x or 0), 2) + 0.0  # + 0.0 turns -0.0 into 0.0
 
 
 PARTY_ACCOUNTS = {"ar": ("customer", "both"), "ap": ("supplier", "both")}
@@ -124,14 +124,7 @@ def approve(actor, doc_type: str, doc_id: int) -> int:
         if doc.status != PENDING:
             raise BusinessError(f"{doc.doc_no}: المستند ليس في انتظار الاعتماد")
         ensure_open(s, doc.doc_date)
-        if doc.status == APPROVED and getattr(doc, "journal_entry_id", None):
-            # What was posted; stock-costed documents would not rebuild the same once the goods moved.
-            lines = [PostingLine(l.account_id, debit=float(l.debit or 0), credit=float(l.credit or 0), memo=l.memo,
-                                 party_id=l.party_id)
-                     for l in s.scalars(select(JournalLine).where(JournalLine.entry_id == doc.journal_entry_id)
-                                        .order_by(JournalLine.id))]
-        else:
-            lines = drop_zero(dt.build_lines(s, doc))
+        lines = drop_zero(dt.build_lines(s, doc))
         entry = None
         # A document whose every line is worth zero (free samples) moves stock without an entry.
         if lines or dt.on_post is None:
