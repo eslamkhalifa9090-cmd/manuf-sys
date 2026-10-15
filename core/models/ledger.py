@@ -46,5 +46,7 @@ class JournalLine(Base):
     debit: Mapped[float] = mapped_column(Money, default=0)
     credit: Mapped[float] = mapped_column(Money, default=0)
     memo: Mapped[str | None] = mapped_column(String(255))
+    # Customer or supplier on control-account lines (subsidiary ledger).
+    party_id: Mapped[int | None] = mapped_column(ForeignKey("parties.id", ondelete="RESTRICT"), index=True)
 
     entry: Mapped[JournalEntry] = relationship(back_populates="lines")

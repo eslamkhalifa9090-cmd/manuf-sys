@@ -133,12 +133,16 @@ def journal_book(date_from: date, date_to: date, include_void: bool = False) -> 
 
 def account_in_use(session, account_id: int) -> bool:
     """True when any journal line or document references the account (posted, void or pending)."""
-    from core.models import CashVoucher, ManualJournalLine
+    from core.models import CashVoucher, ItemGroup, ManualJournalLine, PurchaseInvoice, PurchaseLine, StockVoucher
 
     checks = [
         select(JournalLine.id).where(JournalLine.account_id == account_id),
         select(ManualJournalLine.id).where(ManualJournalLine.account_id == account_id),
         select(CashVoucher.id).where((CashVoucher.treasury_account_id == account_id)
                                      | (CashVoucher.counter_account_id == account_id)),
+        select(PurchaseLine.id).where(PurchaseLine.account_id == account_id),
+        select(PurchaseInvoice.id).where(PurchaseInvoice.treasury_account_id == account_id),
+        select(StockVoucher.id).where(StockVoucher.counter_account_id == account_id),
+        select(ItemGroup.id).where(ItemGroup.inventory_account_id == account_id),
     ]
     return any(session.scalar(q.limit(1)) is not None for q in checks)

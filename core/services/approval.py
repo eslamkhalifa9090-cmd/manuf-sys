@@ -29,6 +29,7 @@ class PostingLine:
     debit: float = 0.0
     credit: float = 0.0
     memo: str | None = None
+    party_id: int | None = None
 
 
 @dataclass
@@ -40,6 +41,9 @@ class DocType:
     describe: Callable
     # session, doc -> list[PostingLine]
     build_lines: Callable
+    # Optional side effects inside the approval transaction, e.g. stock moves.
+    on_post: Callable | None = None  # (session, doc, entry_id | None)
+    on_void: Callable | None = None  # (session, doc)
 
 
 REGISTRY: dict[str, DocType] = {}
@@ -53,8 +57,18 @@ def r2(x) -> float:
     return round(float(x or 0) + 0.0, 2)
 
 
+PARTY_ACCOUNTS = {"ar": ("customer", "both"), "ap": ("supplier", "both")}
+
+
+def drop_zero(lines: list[PostingLine]) -> list[PostingLine]:
+    """Zero-value lines (e.g. free samples at cost 0) carry nothing to post."""
+    return [l for l in lines if r2(l.debit) or r2(l.credit)]
+
+
 def validate_lines(session, lines: list[PostingLine]) -> None:
     """Shared rules for anything that will become a journal entry."""
+    from core.models import Party
+
     if len(lines) < 2:
         raise BusinessError("القيد لازم يكون فيه سطرين على الأقل")
     total_dr = total_cr = 0.0
@@ -71,6 +85,14 @@ def validate_lines(session, lines: list[PostingLine]) -> None:
             raise BusinessError(f"السطر {i}: الحساب {acc.code} - {acc.name_ar} حساب رئيسي ولا يقبل قيود")
         if not acc.is_active:
             raise BusinessError(f"السطر {i}: الحساب {acc.code} - {acc.name_ar} موقوف")
+        kinds = PARTY_ACCOUNTS.get(acc.system_key)
+        if kinds:
+            party = session.get(Party, line.party_id) if line.party_id else None
+            if party is None:
+                who = "العميل" if kinds[0] == "customer" else "المورد"
+                raise BusinessError(f"السطر {i}: حساب {acc.name_ar} لازم يتحدد عليه {who}")
+            if party.kind not in kinds:
+                raise BusinessError(f"السطر {i}: {party.name} مش مسجل كـ {'عميل' if kinds[0] == 'customer' else 'مورد'}")
         total_dr += dr
         total_cr += cr
     if r2(total_dr) != r2(total_cr):
@@ -102,23 +124,29 @@ def approve(actor, doc_type: str, doc_id: int) -> int:
         if doc.status != PENDING:
             raise BusinessError(f"{doc.doc_no}: المستند ليس في انتظار الاعتماد")
         ensure_open(s, doc.doc_date)
-        lines = dt.build_lines(s, doc)
-        validate_lines(s, lines)
-        entry = JournalEntry(
-            entry_date=doc.doc_date, memo=doc.memo, source_type=doc_type, source_id=doc.id,
-            source_no=doc.doc_no, status=ENTRY_POSTED, posted_by_id=actor.id,
-            lines=[JournalLine(account_id=l.account_id, debit=r2(l.debit), credit=r2(l.credit), memo=l.memo)
-                   for l in lines],
-        )
-        s.add(entry)
-        s.flush()
+        lines = drop_zero(dt.build_lines(s, doc))
+        entry = None
+        # A document whose every line is worth zero (free samples) moves stock without an entry.
+        if lines or dt.on_post is None:
+            validate_lines(s, lines)
+            entry = JournalEntry(
+                entry_date=doc.doc_date, memo=doc.memo, source_type=doc_type, source_id=doc.id,
+                source_no=doc.doc_no, status=ENTRY_POSTED, posted_by_id=actor.id,
+                lines=[JournalLine(account_id=l.account_id, debit=r2(l.debit), credit=r2(l.credit), memo=l.memo,
+                                   party_id=l.party_id) for l in lines],
+            )
+            s.add(entry)
+            s.flush()
+        if dt.on_post is not None:
+            dt.on_post(s, doc, entry.id if entry else None)
         doc.status = APPROVED
-        doc.journal_entry_id = entry.id
+        doc.journal_entry_id = entry.id if entry else None
         doc.approved_by_id = actor.id
         doc.approved_at = datetime.now()
         doc.rejection_note = None
-        audit.log(s, actor, "approve", doc_type, doc.id, {"doc_no": doc.doc_no, "entry": entry.entry_no})
-        return entry.id
+        audit.log(s, actor, "approve", doc_type, doc.id,
+                  {"doc_no": doc.doc_no, "entry": entry.entry_no if entry else None})
+        return entry.id if entry else None
 
 
 def return_for_correction(actor, doc_type: str, doc_id: int, note: str) -> None:
@@ -143,11 +171,13 @@ def unapprove(actor, doc_type: str, doc_id: int, reason: str | None = None) -> N
     if not actor.can(APPROVAL_SCREEN, "unapprove"):
         raise BusinessError("ليس لديك صلاحية إلغاء الاعتماد")
     with session_scope() as s:
-        _, doc = _doc(s, doc_type, doc_id)
+        dt, doc = _doc(s, doc_type, doc_id)
         if doc.status != APPROVED:
             raise BusinessError(f"{doc.doc_no}: المستند غير معتمد")
         ensure_open(s, doc.doc_date)
-        entry = s.get(JournalEntry, doc.journal_entry_id)
+        if dt.on_void is not None:
+            dt.on_void(s, doc)
+        entry = s.get(JournalEntry, doc.journal_entry_id) if doc.journal_entry_id else None
         if entry is not None:
             entry.status = ENTRY_VOID
             entry.voided_by_id = actor.id
@@ -202,13 +232,16 @@ def preview(doc_type: str, doc_id: int) -> pd.DataFrame:
     """The journal lines approval would post (or did post)."""
     with session_scope() as s:
         dt, doc = _doc(s, doc_type, doc_id)
-        lines = dt.build_lines(s, doc)
+        from core.models import Party
+
+        lines = drop_zero(dt.build_lines(s, doc))
         accounts = {a.id: a for a in s.scalars(select(Account).where(Account.id.in_([l.account_id for l in lines])))}
+        parties = {p.id: p.name for p in s.scalars(select(Party).where(Party.id.in_([l.party_id for l in lines if l.party_id])))}
         return pd.DataFrame([
             {"الحساب": f"{accounts[l.account_id].code} - {accounts[l.account_id].name_ar}" if l.account_id in accounts else "؟",
-             "مدين": r2(l.debit), "دائن": r2(l.credit), "البيان": l.memo or ""}
+             "الطرف": parties.get(l.party_id, ""), "مدين": r2(l.debit), "دائن": r2(l.credit), "البيان": l.memo or ""}
             for l in lines
-        ])
+        ], columns=["الحساب", "الطرف", "مدين", "دائن", "البيان"])
 
 
 def parse_ref(ref: str) -> tuple[str, int]:

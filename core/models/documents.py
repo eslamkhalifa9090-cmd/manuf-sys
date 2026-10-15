@@ -80,6 +80,7 @@ class ManualJournalLine(Base):
     debit: Mapped[float] = mapped_column(Money, default=0)
     credit: Mapped[float] = mapped_column(Money, default=0)
     memo: Mapped[str | None] = mapped_column(String(255))
+    party_id: Mapped[int | None] = mapped_column(ForeignKey("parties.id", ondelete="RESTRICT"))
 
     journal: Mapped[ManualJournal] = relationship(back_populates="lines")
 
@@ -99,6 +100,9 @@ class CashVoucher(DocumentMixin, Base):
     counter_account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"))
     amount: Mapped[float] = mapped_column(Money)
     party_name: Mapped[str | None] = mapped_column(String(150))
+    party_id: Mapped[int | None] = mapped_column(ForeignKey("parties.id", ondelete="RESTRICT"))
+    # Discount allowed (receipt from a customer) or received (payment to a supplier), on top of `amount`.
+    discount: Mapped[float] = mapped_column(Money, default=0)
     reference: Mapped[str | None] = mapped_column(String(60))
 
     @property
