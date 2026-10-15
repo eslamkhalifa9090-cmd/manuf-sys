@@ -15,18 +15,18 @@ Option Explicit
 
 Public Const PWD As String = "NS#2026!"
 
-Private Const MB_YESNO As Long = 4
-Private Const MB_ICONERROR As Long = 16
-Private Const MB_ICONQUESTION As Long = 32
-Private Const MB_ICONINFO As Long = 64
+Public Const MB_YESNO As Long = 4
+Public Const MB_ICONERROR As Long = 16
+Public Const MB_ICONQUESTION As Long = 32
+Public Const MB_ICONINFO As Long = 64
 Private Const MB_RTL As Long = &H180000
 
 ' Journal register (tblJE) columns
-Private Const JE_NO As Long = 1, JE_DATE As Long = 2, JE_DESC As Long = 3, JE_CODE As Long = 4
-Private Const JE_ACC As Long = 5, JE_PARTY As Long = 6, JE_DR As Long = 7, JE_CR As Long = 8
-Private Const JE_NOTE As Long = 9, JE_STATUS As Long = 10, JE_BY As Long = 11, JE_AT As Long = 12
-Private Const JE_APPBY As Long = 13, JE_APPAT As Long = 14, JE_APPNOTE As Long = 15
-Private Const JE_COLS As Long = 15
+Public Const JE_NO As Long = 1, JE_DATE As Long = 2, JE_DESC As Long = 3, JE_CODE As Long = 4
+Public Const JE_ACC As Long = 5, JE_PARTY As Long = 6, JE_DR As Long = 7, JE_CR As Long = 8
+Public Const JE_NOTE As Long = 9, JE_STATUS As Long = 10, JE_BY As Long = 11, JE_AT As Long = 12
+Public Const JE_APPBY As Long = 13, JE_APPAT As Long = 14, JE_APPNOTE As Long = 15
+Public Const JE_COLS As Long = 15
 
 ' Approvals sheet layout
 Private Const AP_FIRST As Long = 6, AP_LAST As Long = 205
@@ -49,7 +49,7 @@ Public Sub EnsureEvents()
     End If
 End Sub
 
-Private Function RequireLogin() As Boolean
+Public Function RequireLogin() As Boolean
     EnsureEvents
     If CurrentUser = "" Then
         LockDown
@@ -59,12 +59,12 @@ Private Function RequireLogin() As Boolean
     RequireLogin = True
 End Function
 
-Private Sub BeginWork()
+Public Sub BeginWork()
     Application.ScreenUpdating = False
     Application.EnableEvents = False
 End Sub
 
-Private Sub EndWork()
+Public Sub EndWork()
     Application.EnableEvents = True
     Application.ScreenUpdating = True
 End Sub
@@ -77,15 +77,15 @@ Public Function MsgW(ByVal text As String, Optional ByVal flags As Long = MB_ICO
     MsgW = MessageBoxW(Application.hWnd, StrPtr(text), StrPtr(cap), flags Or MB_RTL)
 End Function
 
-Private Function Ask(ByVal text As String) As Boolean
+Public Function Ask(ByVal text As String) As Boolean
     Ask = (MsgW(text, MB_YESNO Or MB_ICONQUESTION) = 6)
 End Function
 
-Private Sub Fail(ByVal key As String, Optional ByVal extra As String = "")
+Public Sub Fail(ByVal key As String, Optional ByVal extra As String = "")
     MsgW Msg(key) & extra, MB_ICONERROR
 End Sub
 
-Private Sub NoPerm()
+Public Sub NoPerm()
     Fail "ERR_NO_PERM"
 End Sub
 
@@ -103,7 +103,7 @@ Public Function NumVal(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumVal = CDbl(v)
 End Function
 
-Private Function Arr2D(ByVal rng As Range) As Variant
+Public Function Arr2D(ByVal rng As Range) As Variant
     Dim a() As Variant
     If rng.Cells.CountLarge = 1 Then
         ReDim a(1 To 1, 1 To 1)
@@ -147,17 +147,17 @@ Public Function Msg(ByVal key As String) As String
     If r Is Nothing Then Msg = key Else Msg = SafeText(r.Cells(1, 2).Value)
 End Function
 
-Private Function NR(ByVal nm As String) As Range
+Public Function NR(ByVal nm As String) As Range
     Set NR = ThisWorkbook.Names(nm).RefersToRange
 End Function
 
-Private Function LocalRange(ByVal ws As Worksheet, ByVal nm As String) As Range
+Public Function LocalRange(ByVal ws As Worksheet, ByVal nm As String) As Range
     On Error Resume Next
     Set LocalRange = ws.Names(nm).RefersToRange
     On Error GoTo 0
 End Function
 
-Private Function ColIndex(ByVal lo As ListObject, ByVal nm As String) As Long
+Public Function ColIndex(ByVal lo As ListObject, ByVal nm As String) As Long
     Dim c As ListColumn
     For Each c In lo.ListColumns
         If StrComp(c.Name, nm, vbTextCompare) = 0 Then
@@ -185,7 +185,7 @@ Public Function KeyOfSheet(ByVal sheetName As String) As String
     Next i
 End Function
 
-Private Function RoleKey(ByVal labelOrKey As String) As String
+Public Function RoleKey(ByVal labelOrKey As String) As String
     Dim lo As ListObject, i As Long
     Set lo = Tbl("tblRoles")
     For i = 1 To lo.ListRows.Count
@@ -197,7 +197,7 @@ Private Function RoleKey(ByVal labelOrKey As String) As String
     Next i
 End Function
 
-Private Function RoleLabel(ByVal key As String) As String
+Public Function RoleLabel(ByVal key As String) As String
     Dim r As Range
     If key = "" Then Exit Function
     Set r = FindInTable("tblRoles", 1, key)
@@ -231,7 +231,7 @@ Public Function CanView(ByVal key As String) As Boolean
     CanView = (PermOf(key) <> "N")
 End Function
 
-Private Function NewRow(ByVal lo As ListObject) As Range
+Public Function NewRow(ByVal lo As ListObject) As Range
     If lo.ListRows.Count = 1 Then
         If Application.WorksheetFunction.CountA(lo.DataBodyRange) = 0 Then
             Set NewRow = lo.DataBodyRange.Rows(1)
@@ -241,13 +241,13 @@ Private Function NewRow(ByVal lo As ListObject) As Range
     Set NewRow = lo.ListRows.Add(AlwaysInsert:=True).Range
 End Function
 
-Private Function DateText(ByVal d As Date) As String
+Public Function DateText(ByVal d As Date) As String
     DateText = Format$(d, "yyyy-mm-dd")
 End Function
 
 ' ============================================================ protection
 
-Private Sub ProtectSheet(ByVal ws As Worksheet)
+Public Sub ProtectSheet(ByVal ws As Worksheet)
     ws.Protect Password:=PWD, DrawingObjects:=True, Contents:=True, Scenarios:=True, _
         UserInterfaceOnly:=True, AllowFormattingColumns:=True, AllowFormattingRows:=True, _
         AllowFiltering:=True
@@ -564,7 +564,7 @@ End Sub
 
 ' ============================================================ chart of accounts
 
-Private Function IsPostingAccount(ByVal code As String) As Boolean
+Public Function IsPostingAccount(ByVal code As String) As Boolean
     Dim lo As ListObject, a As Variant, i As Long, c As String, found As Boolean
     Set lo = Tbl("tblCOA")
     If lo.ListRows.Count = 0 Then Exit Function
@@ -580,13 +580,13 @@ Private Function IsPostingAccount(ByVal code As String) As Boolean
     IsPostingAccount = found
 End Function
 
-Private Function AccountName(ByVal code As String) As String
+Public Function AccountName(ByVal code As String) As String
     Dim r As Range
     Set r = FindInTable("tblCOA", 1, code)
     If Not r Is Nothing Then AccountName = SafeText(r.Cells(1, 2).Value)
 End Function
 
-Private Function PartyExists(ByVal nm As String) As Boolean
+Public Function PartyExists(ByVal nm As String) As Boolean
     PartyExists = Not (FindInTable("tblParties", 1, nm) Is Nothing)
 End Function
 
@@ -635,31 +635,59 @@ End Sub
 
 ' ============================================================ journal entries
 
-Private Function JEStatusOf(ByVal jeNo As String) As String
+Public Function JEStatusOf(ByVal jeNo As String) As String
     Dim r As Range
     Set r = FindInTable("tblJE", JE_NO, jeNo)
     If Not r Is Nothing Then JEStatusOf = SafeText(r.Cells(1, JE_STATUS).Value)
 End Function
 
-Private Function NextJENo() As String
-    Dim n As Long
-    n = CLng(NumVal(NR("setNextJE").Value))
-    If n < 1 Then n = 1
-    Do While JEStatusOf("JE-" & Format$(n, "000000")) <> ""
-        n = n + 1
-    Loop
-    NextJENo = "JE-" & Format$(n, "000000")
-    NR("setNextJE").Value = n + 1
+Public Function NextJENo() As String
+    NextJENo = NextDocNo("setNextJE", "JE-", "tblJE", JE_NO)
 End Function
 
-Private Sub DeleteJERows(ByVal lo As ListObject, ByVal jeNo As String)
+' Next free number "<prefix>000123" from a settings counter, skipping numbers already used in the table.
+Public Function NextDocNo(ByVal setting As String, ByVal prefix As String, ByVal tName As String, ByVal col As Long) As String
+    Dim n As Long
+    n = CLng(NumVal(NR(setting).Value))
+    If n < 1 Then n = 1
+    Do While Not FindInTable(tName, col, prefix & Format$(n, "000000")) Is Nothing
+        n = n + 1
+    Loop
+    NextDocNo = prefix & Format$(n, "000000")
+    NR(setting).Value = n + 1
+End Function
+
+' Appends journal lines to tblJE (sheet must be unprotected by the caller).
+Public Sub WriteJERows(ByVal lo As ListObject, ByVal jeNo As String, ByVal jeDate As Date, ByVal jeDesc As String, _
+        codes() As String, parties() As String, drs() As Double, crs() As Double, notes() As String, ByVal n As Long, _
+        ByVal statusLabel As String, ByVal createdBy As String, ByVal createdAt As Date)
+    Dim k As Long, rw As Range
+    For k = 1 To n
+        Set rw = NewRow(lo)
+        rw.Cells(1, JE_NO).Value = jeNo
+        rw.Cells(1, JE_DATE).Value = jeDate
+        rw.Cells(1, JE_DESC).Value = jeDesc
+        rw.Cells(1, JE_CODE).NumberFormat = "@"
+        rw.Cells(1, JE_CODE).Value = codes(k)
+        rw.Cells(1, JE_ACC).Value = AccountName(codes(k))
+        rw.Cells(1, JE_PARTY).Value = parties(k)
+        If drs(k) <> 0 Then rw.Cells(1, JE_DR).Value = drs(k)
+        If crs(k) <> 0 Then rw.Cells(1, JE_CR).Value = crs(k)
+        rw.Cells(1, JE_NOTE).Value = notes(k)
+        rw.Cells(1, JE_STATUS).Value = statusLabel
+        rw.Cells(1, JE_BY).Value = createdBy
+        rw.Cells(1, JE_AT).Value = createdAt
+    Next k
+End Sub
+
+Public Sub DeleteJERows(ByVal lo As ListObject, ByVal jeNo As String)
     Dim i As Long
     For i = lo.ListRows.Count To 1 Step -1
         If SafeText(lo.DataBodyRange.Cells(i, JE_NO).Value) = jeNo Then lo.ListRows(i).Delete
     Next i
 End Sub
 
-Private Function NormalizeJENo(ByVal s As String) As String
+Public Function NormalizeJENo(ByVal s As String) As String
     s = UCase$(Trim$(s))
     If s <> "" And IsNumeric(s) Then s = "JE-" & Format$(CLng(s), "000000")
     NormalizeJENo = s
@@ -678,7 +706,7 @@ Private Sub SaveJE(ByVal stKey As String)
     Dim codes(1 To 50) As String, parties(1 To 50) As String, notes(1 To 50) As String
     Dim drs(1 To 50) As Double, crs(1 To 50) As Double
     Dim code As String, pty As String, dr As Double, cr As Double, totDr As Double, totCr As Double
-    Dim jeNo As String, curSt As String, jeDate As Date, jeDesc As String, lo As ListObject, rw As Range
+    Dim jeNo As String, curSt As String, jeDate As Date, jeDesc As String, lo As ListObject
     If Not RequireLogin() Then Exit Sub
     If Not CanEdit("JE_ENTRY") Then NoPerm: Exit Sub
     On Error GoTo EH
@@ -709,6 +737,7 @@ Private Sub SaveJE(ByVal stKey As String)
     If jeNo <> "" Then
         curSt = JEStatusOf(jeNo)
         If curSt <> "" And curSt <> Msg("ST_DRAFT") And curSt <> Msg("ST_RETURNED") Then Fail "ERR_NOT_EDITABLE": Exit Sub
+        If IsLinkedJE(jeNo) Then Fail "ERR_LINKED_DOC": Exit Sub
     End If
 
     BeginWork
@@ -719,22 +748,7 @@ Private Sub SaveJE(ByVal stKey As String)
     Else
         DeleteJERows lo, jeNo
     End If
-    For k = 1 To n
-        Set rw = NewRow(lo)
-        rw.Cells(1, JE_NO).Value = jeNo
-        rw.Cells(1, JE_DATE).Value = jeDate
-        rw.Cells(1, JE_DESC).Value = jeDesc
-        rw.Cells(1, JE_CODE).NumberFormat = "@"
-        rw.Cells(1, JE_CODE).Value = codes(k)
-        rw.Cells(1, JE_ACC).Value = AccountName(codes(k))
-        rw.Cells(1, JE_PARTY).Value = parties(k)
-        If drs(k) <> 0 Then rw.Cells(1, JE_DR).Value = drs(k)
-        If crs(k) <> 0 Then rw.Cells(1, JE_CR).Value = crs(k)
-        rw.Cells(1, JE_NOTE).Value = notes(k)
-        rw.Cells(1, JE_STATUS).Value = Msg(stKey)
-        rw.Cells(1, JE_BY).Value = CurrentUser
-        rw.Cells(1, JE_AT).Value = Now
-    Next k
+    WriteJERows lo, jeNo, jeDate, jeDesc, codes, parties, drs, crs, notes, n, Msg(stKey), CurrentUser, Now
     ProtectSheet lo.Parent
     NR("jeeNo").Value = jeNo
     NR("jeeStatus").Value = Msg(stKey)
@@ -749,7 +763,7 @@ EH:
     MsgW Msg("ERR_UNEXPECTED") & vbLf & Err.Description, MB_ICONERROR
 End Sub
 
-Private Sub ClearEntry()
+Public Sub ClearEntry()
     Dim lines As Range
     BeginWork
     NR("jeeNo").Value = ""
@@ -782,6 +796,7 @@ Public Sub BtnJELoad()
         If SafeText(a(i, JE_NO)) = jeNo Then n = n + 1
     Next i
     If n = 0 Then Fail "ERR_NOT_FOUND": Exit Sub
+    If IsLinkedJE(jeNo) Then Fail "ERR_LINKED_DOC": Exit Sub
     Set lines = NR("jeeLines")
     If n > lines.Rows.Count Then Fail "ERR_TOO_MANY": Exit Sub
     ClearEntry
@@ -884,6 +899,12 @@ Public Sub BtnApprExecute()
             ElseIf JEStatusOf(jeNo) <> Msg("ST_PENDING") Then
                 skipped = skipped + 1
             Else
+                If logKey = "JE_APPROVE" Then
+                    If Not RepostStockDoc(jeNo) Then
+                        skipped = skipped + 1
+                        GoTo NextRow
+                    End If
+                End If
                 cnt = 0
                 For i = 1 To lo.ListRows.Count
                     If SafeText(lo.DataBodyRange.Cells(i, JE_NO).Value) = jeNo Then
@@ -894,10 +915,12 @@ Public Sub BtnApprExecute()
                         cnt = cnt + 1
                     End If
                 Next i
+                SyncDocStatus jeNo, newSt
                 If cnt > 0 Then done = done + 1
                 WriteLog logKey, SheetOf("JE").Name, "", Msg("ST_PENDING"), jeNo & " -> " & newSt & IIf(note = "", "", " / " & note)
             End If
         End If
+NextRow:
     Next r
     EndWork
     RefreshApprovals
@@ -993,7 +1016,7 @@ Public Sub BtnTBRefresh()
     WriteLog "REPORT", ws.Name, "", "", DateText(NR("tbFrom").Value) & " : " & DateText(NR("tbTo").Value)
 End Sub
 
-Private Function CodeLevel(ByVal code As String) As Long
+Public Function CodeLevel(ByVal code As String) As Long
     Select Case Len(code)
         Case 1: CodeLevel = 1
         Case 2: CodeLevel = 2
@@ -1102,7 +1125,7 @@ Private Function LedgerAfter(a As Variant, ByVal x As Long, ByVal y As Long) As 
     End If
 End Function
 
-Private Function Nature(ByVal v As Double) As String
+Public Function Nature(ByVal v As Double) As String
     If Round(v, 2) > 0 Then
         Nature = Msg("DR")
     ElseIf Round(v, 2) < 0 Then
