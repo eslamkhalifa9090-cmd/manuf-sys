@@ -20,7 +20,7 @@ SCREEN = "pricing"
 CONV_FIELDS = ("wages", "energy", "maintenance", "other")
 COPY_FIELDS = ("quote_date", "party_id", "item_id", "qty", "pieces_per_unit", "piece_weight_g", "method", "entry_basis",
                "waste_pct",
-               *CONV_FIELDS, "mold_mode", "mold_name", "mold_cost", "mold_life_pieces", "ga_basis", "ga_value",
+               *CONV_FIELDS, "mold_mode", "mold_id", "mold_name", "mold_cost", "mold_life_pieces", "ga_basis", "ga_value",
                "selling_basis", "selling_value", "margin_pct", "offered_price", "notes")
 PRICE_FIELD = {WAC: "wac_price", LAST: "last_price", MANUAL: "manual_price"}
 
@@ -115,6 +115,8 @@ def _fill(q: PriceQuote, data: dict) -> None:
         v = data.get(f)
         if f in ("mold_name", "notes"):
             v = (v or "").strip() or None
+        elif f == "mold_id":
+            v = (v or None) if data.get("mold_mode") != "none" else None
         elif f in ("piece_weight_g", "offered_price"):
             v = _f(v) or None
         elif f == "entry_basis":

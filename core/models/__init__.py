@@ -10,3 +10,6 @@ from core.models.inventory import (  # noqa: F401
     Item, ItemGroup, PurchaseInvoice, PurchaseLine, StockMove, StockVoucher, StockVoucherLine,
 )
 from core.models.costing import Bom, BomLine, CostRate, PriceQuote, PriceQuoteLine  # noqa: F401
+from core.models.molds import (  # noqa: F401
+    Mold, MoldAmortization, MoldAmortizationLine, MoldMaintenance, MoldSettlement, MoldUsage,
+)

@@ -7,7 +7,8 @@ import streamlit as st
 from core.models.documents import STATUS_LABELS
 from core.models.inventory import CASH, CREDIT, PAYMENT_TERMS, PURCHASE_INVOICE, PURCHASE_KINDS, PURCHASE_RETURN
 from core.models.parties import SUPPLIER
-from core.services import cash, items, parties, purchases as svc
+from core.models.molds import AMORTIZED
+from core.services import cash, items, molds, parties, purchases as svc
 from ui.common import account_options, export_buttons, flash, guard, page_header, run_action
 
 SCREEN = svc.SCREEN
@@ -21,10 +22,13 @@ def _direct_accounts() -> dict[int, str]:
 
 
 def _lines_editor(key: str, lines: list[dict], item_opts: dict, acc_opts: dict) -> list[dict]:
+    mold_opts = molds.mold_options(ownership=AMORTIZED)
     rows = [{"الصنف": item_opts.get(l["item_id"]), "أو حساب مباشر": acc_opts.get(l["account_id"]),
-             "الكمية": l["qty"], "سعر الوحدة": l["unit_price"], "البيان": l.get("description", "")} for l in lines]
+             "الأسطمبة": mold_opts.get(l.get("mold_id")), "الكمية": l["qty"], "سعر الوحدة": l["unit_price"],
+             "البيان": l.get("description", "")} for l in lines]
     if not rows:
-        rows = [{"الصنف": None, "أو حساب مباشر": None, "الكمية": None, "سعر الوحدة": None, "البيان": ""}] * 3
+        rows = [{"الصنف": None, "أو حساب مباشر": None, "الأسطمبة": None, "الكمية": None, "سعر الوحدة": None,
+                 "البيان": ""}] * 3
     df = pd.DataFrame(rows).astype({"الكمية": "float", "سعر الوحدة": "float"})
     edited = st.data_editor(
         # The editable grid lays out left to right; reverse so the first column sits on the right.
@@ -33,16 +37,19 @@ def _lines_editor(key: str, lines: list[dict], item_opts: dict, acc_opts: dict) 
             "الصنف": st.column_config.SelectboxColumn(options=list(item_opts.values()), width="large"),
             "أو حساب مباشر": st.column_config.SelectboxColumn(options=list(acc_opts.values()), width="medium",
                                                               help="للأصول الثابتة والمصروفات اللي مش بتدخل المخزن"),
+            "الأسطمبة": st.column_config.SelectboxColumn(options=list(mold_opts.values()), width="medium",
+                                                         help="مطلوبة مع حساب الأسطمبات 1106؛ سجّلها الأول في سجل الأسطمبات"),
             "الكمية": st.column_config.NumberColumn(min_value=0.0, format="%.3f"),
             "سعر الوحدة": st.column_config.NumberColumn(min_value=0.0, format="%.4f"),
         },
     )
     item_ids = {v: k for k, v in item_opts.items()}
     acc_ids = {v: k for k, v in acc_opts.items()}
+    mold_ids = {v: k for k, v in mold_opts.items()}
     out = []
     for r in edited.to_dict("records"):
         out.append({"item_id": item_ids.get(r["الصنف"]), "account_id": acc_ids.get(r["أو حساب مباشر"]),
-                    "qty": r["الكمية"] if pd.notna(r["الكمية"]) else 0,
+                    "mold_id": mold_ids.get(r["الأسطمبة"]), "qty": r["الكمية"] if pd.notna(r["الكمية"]) else 0,
                     "unit_price": r["سعر الوحدة"] if pd.notna(r["سعر الوحدة"]) else 0,
                     "description": r["البيان"] if isinstance(r["البيان"], str) else ""})
     return out

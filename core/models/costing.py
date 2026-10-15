@@ -130,6 +130,7 @@ class PriceQuote(Base):
     maintenance: Mapped[float] = mapped_column(UnitCost, default=0)
     other: Mapped[float] = mapped_column(UnitCost, default=0)
     mold_mode: Mapped[str] = mapped_column(String(10), default=MOLD_NONE)
+    mold_id: Mapped[int | None] = mapped_column(ForeignKey("molds.id", ondelete="SET NULL"))
     mold_name: Mapped[str | None] = mapped_column(String(150))
     mold_cost: Mapped[float] = mapped_column(UnitCost, default=0)
     mold_life_pieces: Mapped[float] = mapped_column(Qty, default=0)

@@ -8,7 +8,7 @@ from core.models.costing import (BASES, ENERGY, ENTRY_BASES, ENTRY_ORDER, ENTRY_
                                  MOLD_LIFE, MOLD_MODES, MOLD_NONE, OTHER, PCT, Q_ACCEPTED, QUOTE_STATUSES, SELLING,
                                  WAGES)
 from core.models.parties import CUSTOMER
-from core.services import boms, cost_rates, items, parties, quotes as svc
+from core.services import boms, cost_rates, items, molds, parties, quotes as svc
 from ui.common import export_buttons, flash, guard, page_header, run_action
 from views.cost_card import show_card
 
@@ -82,6 +82,16 @@ def _priced(lines: list[dict], snapshot: dict[int, dict], refresh: bool) -> list
                     "in_grams": l.get("in_grams", False), "wac_price": wac,
                     "last_price": last, "manual_price": float(manual)})
     return out
+
+
+def _fill_mold(k: str) -> None:
+    """Picking a registered mold fills its name, cost and life (in pieces)."""
+    mold_id = st.session_state.get(f"{k}_mid")
+    if mold_id:
+        md = molds.quote_defaults(mold_id)
+        st.session_state[f"{k}_mname"] = md["name"]
+        st.session_state[f"{k}_mcost"] = float(md["cost"])
+        st.session_state[f"{k}_mlife"] = float(md["life_pieces"])
 
 
 def _overhead_inputs(col_basis, col_value, label: str, comp: str, v: dict, rates: dict, key: str):
@@ -187,15 +197,27 @@ def _form(user, quote: dict | None, key: str) -> None:
     modes = list(MOLD_MODES)
     mold_mode = c9.radio("نصيب الأسطمبة", modes, format_func=MOLD_MODES.get, horizontal=True, key=f"{k}_mold",
                          index=modes.index(v.get("mold_mode", MOLD_NONE)))
+    mold_id = None
     mold_name, mold_cost, mold_life = v.get("mold_name") or "", float(v.get("mold_cost") or 0), \
         float(v.get("mold_life_pieces") or 0)
     if mold_mode != MOLD_NONE:
+        registered = molds.mold_options()
+        mold_id = v.get("mold_id") if v.get("mold_id") in registered else None
+        picked = st.selectbox("من سجل الأسطمبات", [None, *registered], key=f"{k}_mid",
+                              index=[None, *registered].index(mold_id),
+                              format_func=lambda i: "— أسطمبة مش في السجل (اكتبها يدوي) —" if i is None else registered[i],
+                              on_change=_fill_mold, args=(k,))
+        mold_id = picked
+        if picked:
+            md = molds.quote_defaults(picked)
+            st.caption(f"القيمة الدفترية {md['book_value']:,.2f} · العمر المتبقي {md['remaining_pieces']:,.0f} قطعة")
         c10, c11, c12 = st.columns(3)
-        mold_name = c10.text_input("الأسطمبة", value=mold_name, key=f"{k}_mname")
-        mold_cost = c11.number_input("تكلفة الأسطمبة", min_value=0.0, value=mold_cost, key=f"{k}_mcost")
+        for key_, val in ((f"{k}_mname", mold_name), (f"{k}_mcost", mold_cost), (f"{k}_mlife", mold_life)):
+            st.session_state.setdefault(key_, val)
+        mold_name = c10.text_input("الأسطمبة", key=f"{k}_mname")
+        mold_cost = c11.number_input("تكلفة الأسطمبة", min_value=0.0, key=f"{k}_mcost")
         if mold_mode == MOLD_LIFE:
-            mold_life = c12.number_input("العمر الافتراضي بالقطع", min_value=0.0, step=1000.0, value=mold_life,
-                                         key=f"{k}_mlife")
+            mold_life = c12.number_input("العمر الافتراضي بالقطع", min_value=0.0, step=1000.0, key=f"{k}_mlife")
         else:
             c12.caption("بتتقسم على عدد قطع الطلبية")
 
@@ -213,7 +235,7 @@ def _form(user, quote: dict | None, key: str) -> None:
 
     data = {"quote_date": quote_date, "party_id": party_id, "item_id": item_id, "qty": qty, "pieces_per_unit": ppu,
             "piece_weight_g": weight or None, "method": method, "entry_basis": basis, "waste_pct": waste, **conv, "mold_mode": mold_mode,
-            "mold_name": mold_name, "mold_cost": mold_cost, "mold_life_pieces": mold_life, "ga_basis": ga_basis,
+            "mold_id": mold_id, "mold_name": mold_name, "mold_cost": mold_cost, "mold_life_pieces": mold_life, "ga_basis": ga_basis,
             "ga_value": ga_value, "selling_basis": sell_basis, "selling_value": sell_value, "margin_pct": margin,
             "offered_price": offered or None, "notes": notes, "lines": lines}
     st.divider()

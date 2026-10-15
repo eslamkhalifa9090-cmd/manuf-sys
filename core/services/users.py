@@ -197,3 +197,16 @@ def save_permission_matrix(actor, role_id: int, matrix: pd.DataFrame) -> None:
                 # Actions that do not apply to the screen are always stored as False.
                 setattr(p, f"can_{a}", bool(rec.get(a)) and a in screen.actions)
         audit.log(s, actor, "update", "role_permissions", role_id)
+
+
+VIEW_MODES = {"desktop": "كمبيوتر", "mobile": "موبايل"}
+
+
+def set_view_mode(user_id: int, mode: str) -> None:
+    """Remember the layout a user picked (no permission needed: it is their own preference)."""
+    if mode not in VIEW_MODES:
+        raise BusinessError("طريقة العرض غير معروفة")
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is not None:
+            user.view_mode = mode

@@ -22,12 +22,65 @@ html, body, .stApp, .stMarkdown, .stTextInput, .stSelectbox, .stButton, .stForm,
 [data-testid="stDataFrame"], [data-testid="stDataFrameResizable"], [data-testid="stDataEditor"] { direction: ltr; }
 .stTabs [data-baseweb="tab-list"] { gap: 1.5rem; }
 h1, h2, h3 { color: #1F4E79; }
+[data-testid="stMetricValue"] { font-size: 1.6rem; }
+/* In RTL the collapsed sidebar slides the wrong way and its icons bleed over the page. */
+[data-testid="stSidebar"][data-collapsed="true"], [data-testid="stSidebar"][data-collapsed="true"] * {
+    visibility: hidden !important;
+}
 </style>
 """
 
 
+# Phone layout: figures two per row instead of one tall column, tighter headings, scrollable tabs.
+_METRIC_ROW = '[data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]):not(:has([data-testid="stHorizontalBlock"]))'
+PHONE_RULES = f"""
+{_METRIC_ROW} {{ flex-wrap: wrap; gap: .5rem; }}
+{_METRIC_ROW} > [data-testid="stColumn"] {{
+    min-width: calc(50% - .5rem) !important; flex: 1 1 calc(50% - .5rem) !important; width: calc(50% - .5rem) !important;
+}}
+[data-testid="stMetricValue"] {{ font-size: 1.15rem; }}
+[data-testid="stMetricLabel"] p {{ font-size: .8rem; }}
+.stApp h1 {{ font-size: 1.6rem; }}
+.stTabs [data-baseweb="tab-list"] {{ gap: .75rem; overflow-x: auto; }}
+.block-container {{ padding: 2.5rem 1rem 2rem 1rem; }}
+"""
+# Chosen "mobile" view: the phone rules at any width, inputs two per row, full-width buttons, a narrow page.
+MOBILE_VIEW = """
+.block-container { max-width: 760px; margin: 0 auto; }
+[data-testid="stHorizontalBlock"]:not(:has([data-testid="stHorizontalBlock"])) { flex-wrap: wrap; gap: .5rem; }
+[data-testid="stHorizontalBlock"]:not(:has([data-testid="stHorizontalBlock"])) > [data-testid="stColumn"] {
+    min-width: calc(50% - .5rem) !important; flex: 1 1 calc(50% - .5rem) !important;
+}
+.stButton button, .stDownloadButton button, .stFormSubmitButton button { width: 100%; }
+"""
+
+
+def view_mode() -> str:
+    """desktop or mobile: the signed-in choice, else the link's ?view=, else desktop."""
+    mode = st.session_state.get("view_mode") or st.query_params.get("view") or "desktop"
+    return mode if mode in ("desktop", "mobile") else "desktop"
+
+
+# Phones: close the sidebar after a page is picked, so the page is not hidden behind the menu.
+CLOSE_MENU_JS = """<script>
+const d = window.parent.document;
+if (!d._closeMenuOnNav) {
+  d._closeMenuOnNav = true;
+  d.addEventListener("click", (e) => {
+    if (e.target.closest('[data-testid="stSidebarNav"] a') && window.parent.innerWidth < 768) {
+      setTimeout(() => d.querySelector('[data-testid="stSidebarCollapseButton"] button')?.click(), 250);
+    }
+  }, true);
+}
+</script>"""
+
+
 def inject_css() -> None:
-    st.markdown(RTL_CSS, unsafe_allow_html=True)
+    css = RTL_CSS.replace("</style>", f"@media (max-width: 640px) {{{PHONE_RULES}}}\n</style>")
+    if view_mode() == "mobile":
+        css = css.replace("</style>", PHONE_RULES + MOBILE_VIEW + "</style>")
+    st.markdown(css, unsafe_allow_html=True)
+    st.html(CLOSE_MENU_JS, unsafe_allow_javascript=True)
 
 
 def current_user() -> CurrentUser:

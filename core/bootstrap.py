@@ -3,7 +3,7 @@ from sqlalchemy import inspect, text
 
 from core.db import Base, get_engine, session_scope
 from core import models  # noqa: F401  (registers all tables)
-from core.services import cash, journals, purchases, stock_vouchers  # noqa: F401  (register approval document types)
+from core.services import cash, journals, mold_docs, purchases, stock_vouchers  # noqa: F401  (register approval document types)
 from core.services.items import seed_groups
 from core.services.accounts import seed_chart
 from core.services.settings import ensure_settings
