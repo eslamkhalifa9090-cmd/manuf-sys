@@ -169,14 +169,17 @@ def plan_month(session, year: int, month: int, exclude_doc_id: int | None = None
     start, end = date(year, month, 1), reg.month_end(year, month)
     out = []
     for m in session.scalars(select(Mold).where(Mold.ownership.in_(AMORTIZED), Mold.status == ACTIVE).order_by(Mold.code)):
-        units = reg.usage_units(session, m.id, start, end)
+        units = reg.usage_units(session, m.id, start, end, manual_only=True)
         if units <= 0:
             continue
         cost = reg.cost_total(session, m, end)
-        acc = reg.accumulated(session, m, statuses=(APPROVED, PENDING, RETURNED), before=(year, month))
+        # Production orders in the month already took their share; the hand-typed usage gets the rest.
+        acc = (reg.accumulated(session, m, statuses=(APPROVED, PENDING, RETURNED), before=(year, month))
+               + reg.production_amortized(session, m.id, month=(year, month)))
         base = max(r2(cost - float(m.salvage_value or 0) - acc), 0.0)
-        remaining = reg.life_total(session, m, end) - float(m.opening_usage or 0) - reg.usage_units(session, m.id,
-                                                                                                    before=start)
+        produced = reg.usage_units(session, m.id, start, end) - units
+        remaining = (reg.life_total(session, m, end) - float(m.opening_usage or 0)
+                     - reg.usage_units(session, m.id, before=start) - produced)
         rate = round(base / remaining, 6) if remaining > 0 else 0.0
         amount = base if units >= remaining else min(r2(units * rate), base)
         out.append({"mold_id": m.id, "code": m.code, "name": m.name, "units": units, "rate": rate, "amount": r2(amount),
@@ -225,13 +228,15 @@ def compute_month(actor, year: int, month: int, memo: str = "") -> int:
             raise BusinessError(f"فيه إهلاك محسوب لشهر بعده ({later.month}/{later.year}); احذفه الأول")
         # Every earlier month that had usage must already have its document, so rates stay sequential.
         first = s.scalar(select(MoldUsage.usage_date).join(Mold, Mold.id == MoldUsage.mold_id)
-                         .where(Mold.ownership.in_(AMORTIZED), MoldUsage.usage_date < date(year, month, 1))
+                         .where(Mold.ownership.in_(AMORTIZED), MoldUsage.production_order_id.is_(None),
+                                MoldUsage.usage_date < date(year, month, 1))
                          .order_by(MoldUsage.usage_date))
         if first is not None:
             y, mth = first.year, first.month
             while (y, mth) < (year, month):
                 has_usage = s.scalar(select(MoldUsage.id).join(Mold, Mold.id == MoldUsage.mold_id).where(
-                    Mold.ownership.in_(AMORTIZED), MoldUsage.usage_date >= date(y, mth, 1),
+                    Mold.ownership.in_(AMORTIZED), MoldUsage.production_order_id.is_(None),
+                    MoldUsage.usage_date >= date(y, mth, 1),
                     MoldUsage.usage_date <= reg.month_end(y, mth)).limit(1))
                 has_doc = s.scalar(select(MoldAmortization.id).where(MoldAmortization.year == y,
                                                                      MoldAmortization.month == mth))

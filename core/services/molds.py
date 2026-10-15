@@ -2,8 +2,10 @@
 
 Cost = opening cost + approved purchase lines that name the mold + approved overhauls.
 Life = useful life + extra life from approved overhauls (counter units).
-Accumulated = opening amortization + amortization lines (approved, or also pending
-where a calculation must see the months before it).
+Accumulated = opening amortization + monthly amortization lines (approved, or also pending
+where a calculation must see the months before it) + approved production orders' share.
+Usage written by a production order is amortized by that order (Dr 1303); the monthly
+document takes only usage typed in by hand.
 """
 import calendar
 from datetime import date
@@ -80,8 +82,10 @@ def life_total(session, mold: Mold, as_of: date | None = None) -> float:
 
 
 def usage_units(session, mold_id: int, date_from: date | None = None, date_to: date | None = None,
-                before: date | None = None) -> float:
+                before: date | None = None, manual_only: bool = False) -> float:
     q = select(func.sum(MoldUsage.units)).where(MoldUsage.mold_id == mold_id)
+    if manual_only:
+        q = q.where(MoldUsage.production_order_id.is_(None))
     if date_from:
         q = q.where(MoldUsage.usage_date >= date_from)
     if date_to:
@@ -101,7 +105,25 @@ def accumulated(session, mold: Mold, as_of: date | None = None, statuses=(APPROV
     if before:
         y, m = before
         q = q.where((MoldAmortization.year < y) | ((MoldAmortization.year == y) & (MoldAmortization.month < m)))
-    return r2(float(mold.opening_amortization or 0) + float(session.scalar(q) or 0))
+    return r2(float(mold.opening_amortization or 0) + float(session.scalar(q) or 0)
+              + production_amortized(session, mold.id, date_to=as_of, before=before))
+
+
+def production_amortized(session, mold_id: int, date_to: date | None = None, before: tuple[int, int] | None = None,
+                         month: tuple[int, int] | None = None) -> float:
+    """Amortization approved production orders charged to work in process for this mold."""
+    from core.models.production import ProductionOrder
+
+    q = select(func.sum(ProductionOrder.mold_amount)).where(ProductionOrder.mold_id == mold_id,
+                                                            ProductionOrder.status == APPROVED)
+    if date_to:
+        q = q.where(ProductionOrder.doc_date <= date_to)
+    if before:
+        q = q.where(ProductionOrder.doc_date < date(before[0], before[1], 1))
+    if month:
+        q = q.where(ProductionOrder.doc_date >= date(month[0], month[1], 1),
+                    ProductionOrder.doc_date <= month_end(*month))
+    return r2(session.scalar(q) or 0)
 
 
 def recovered(session, mold_id: int, as_of: date | None = None) -> float:
@@ -214,7 +236,12 @@ def save_mold(actor, mold_id: int | None, data: dict) -> int:
                 raise BusinessError("الأسطمبة عليها حركات؛ مينفعش تغيّر وحدة العداد")
             if busy and (m.ownership in AMORTIZED) != (ownership in AMORTIZED):
                 raise BusinessError("الأسطمبة عليها حركات؛ مينفعش تحوّلها بين ملك المصنع وملك العميل")
-            locked = s.scalar(select(MoldAmortizationLine.id).where(MoldAmortizationLine.mold_id == m.id).limit(1))
+            from core.models.production import ProductionOrder
+
+            locked = (s.scalar(select(MoldAmortizationLine.id).where(MoldAmortizationLine.mold_id == m.id).limit(1))
+                      or s.scalar(select(ProductionOrder.id).where(ProductionOrder.mold_id == m.id,
+                                                                   ProductionOrder.status == APPROVED,
+                                                                   ProductionOrder.mold_amount > 0).limit(1)))
             changed = (float(m.useful_life or 0) != life or float(m.salvage_value or 0) != nums["salvage_value"]
                        or float(m.opening_cost or 0) != nums["opening_cost"]
                        or float(m.opening_amortization or 0) != nums["opening_amortization"]
@@ -251,8 +278,14 @@ def delete_mold(actor, mold_id: int) -> None:
         m = s.get(Mold, mold_id)
         if m is None:
             return
+        from core.models.production import ProductionOrder
+        from core.models.sales import SalesLine, SalesOrderLine
+
         refs = [select(PurchaseLine.id).where(PurchaseLine.mold_id == mold_id),
-                select(PriceQuote.id).where(PriceQuote.mold_id == mold_id)]
+                select(PriceQuote.id).where(PriceQuote.mold_id == mold_id),
+                select(ProductionOrder.id).where(ProductionOrder.mold_id == mold_id),
+                select(SalesLine.id).where(SalesLine.mold_id == mold_id),
+                select(SalesOrderLine.id).where(SalesOrderLine.mold_id == mold_id)]
         if _has_activity(s, mold_id) or any(s.scalar(q.limit(1)) is not None for q in refs):
             raise BusinessError("الأسطمبة عليها حركات أو مستندات؛ غيّر حالتها لـ «خارج الخدمة» بدل الحذف")
         audit.log(s, actor, "delete", "mold", m.id, {"code": m.code, "name": m.name})
@@ -402,6 +435,8 @@ def save_usage(actor, usage_id: int | None, mold_id: int, usage_date: date, shot
             u = s.get(MoldUsage, usage_id)
             if u is None:
                 raise BusinessError("الإذن غير موجود")
+            if u.production_order_id:
+                raise BusinessError("السطر ده جاي من أمر إنتاج؛ عدّله من أمر الإنتاج")
             _check_usage_open(s, u.usage_date)
         pieces, units = counter_units(m, shots, cav)
         u.mold_id, u.usage_date, u.shots, u.cavities, u.pieces, u.units = m.id, usage_date, float(shots), cav, pieces, units
@@ -419,6 +454,8 @@ def delete_usage(actor, usage_id: int) -> None:
         u = s.get(MoldUsage, usage_id)
         if u is None:
             return
+        if u.production_order_id:
+            raise BusinessError("السطر ده جاي من أمر إنتاج؛ الغي اعتماد أمر الإنتاج بدل الحذف")
         _check_usage_open(s, u.usage_date)
         audit.log(s, actor, "delete", "mold_usage", u.id, {"mold_id": u.mold_id, "units": float(u.units)})
         s.delete(u)
@@ -439,10 +476,12 @@ def usage_frame(mold_id: int | None = None, date_from: date | None = None, date_
         rows = [{"id": u.id, "التاريخ": u.usage_date, "الأسطمبة": f"{molds[u.mold_id].code} - {molds[u.mold_id].name}",
                  "الكبسات": float(u.shots), "التجاويف الشغالة": u.cavities, "القطع": float(u.pieces),
                  "بوحدة العداد": float(u.units), "الوحدة": COUNTER_UNITS[molds[u.mold_id].counter_unit],
-                 "المنتج": items.get(u.item_id, ""), "البيان": u.memo or "", "سجّله": users.get(u.created_by_id, "")}
+                 "المنتج": items.get(u.item_id, ""),
+                 "المصدر": f"PO-{u.production_order_id:06d}" if u.production_order_id else "يدوي",
+                 "البيان": u.memo or "", "سجّله": users.get(u.created_by_id, "")}
                 for u in s.scalars(q)]
     return pd.DataFrame(rows, columns=["id", "التاريخ", "الأسطمبة", "الكبسات", "التجاويف الشغالة", "القطع",
-                                       "بوحدة العداد", "الوحدة", "المنتج", "البيان", "سجّله"])
+                                       "بوحدة العداد", "الوحدة", "المنتج", "المصدر", "البيان", "سجّله"])
 
 
 def quote_defaults(mold_id: int) -> dict:

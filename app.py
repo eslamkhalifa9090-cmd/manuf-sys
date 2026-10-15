@@ -10,8 +10,8 @@ from core.services.users import VIEW_MODES, set_view_mode
 from ui.common import inject_css, show_flash, view_mode
 from views import (accounts, approvals, audit_log, auth, boms, cash_vouchers, company_settings, cost_card, cost_rates,
                    dashboard, item_card, items, journal_book, ledger, manual_journals, molds, notifications, parties,
-                   party_statement, periods, pricing, purchases, purchases_report, roles, stock_report, stock_vouchers,
-                   system, trial_balance, users)
+                   party_statement, periods, pricing, production, purchases, purchases_report, roles, sales,
+                   stock_report, stock_vouchers, system, trial_balance, users)
 
 st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide",
                    initial_sidebar_state="collapsed" if view_mode() == "mobile" else "auto")
@@ -46,6 +46,14 @@ VIEWS = {
     "mold_amortization": molds.render_amortization,
     "mold_settlement": molds.render_settlement,
     "mold_report": molds.render_report,
+    "sales_orders": sales.render_orders,
+    "sales_invoices": sales.render_invoices,
+    "sales_report": sales.render_report,
+    "ar_aging": sales.render_aging,
+    "compound_runs": production.render_compound_runs,
+    "production_orders": production.render_production_orders,
+    "overhead_close": production.render_overhead_close,
+    "production_report": production.render_report,
     "company_settings": company_settings.render,
     "users": users.render,
     "roles": roles.render,

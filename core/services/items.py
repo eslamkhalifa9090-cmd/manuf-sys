@@ -156,6 +156,8 @@ def delete_item(actor, item_id: int) -> None:
     if not actor.can(SCREEN, "delete"):
         raise BusinessError("ليس لديك صلاحية الحذف")
     from core.models import Bom, BomLine, PriceQuote, PriceQuoteLine, PurchaseLine, StockVoucherLine
+    from core.models.production import CompoundRun, CompoundRunLine, ProductionLine, ProductionOrder
+    from core.models.sales import SalesLine, SalesOrderLine
 
     with session_scope() as s:
         it = s.get(Item, item_id)
@@ -163,7 +165,13 @@ def delete_item(actor, item_id: int) -> None:
             return
         for q in (select(StockMove.id).where(StockMove.item_id == item_id),
                   select(PurchaseLine.id).where(PurchaseLine.item_id == item_id),
-                  select(StockVoucherLine.id).where(StockVoucherLine.item_id == item_id)):
+                  select(StockVoucherLine.id).where(StockVoucherLine.item_id == item_id),
+                  select(SalesLine.id).where(SalesLine.item_id == item_id),
+                  select(SalesOrderLine.id).where(SalesOrderLine.item_id == item_id),
+                  select(CompoundRun.id).where(CompoundRun.output_item_id == item_id),
+                  select(CompoundRunLine.id).where(CompoundRunLine.item_id == item_id),
+                  select(ProductionOrder.id).where(ProductionOrder.item_id == item_id),
+                  select(ProductionLine.id).where(ProductionLine.item_id == item_id)):
             if s.scalar(q.limit(1)) is not None:
                 raise BusinessError("الصنف عليه حركات أو مستندات؛ أوقفه بدلاً من الحذف")
         for q in (select(BomLine.id).where(BomLine.component_id == item_id),

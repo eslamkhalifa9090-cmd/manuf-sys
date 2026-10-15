@@ -16,7 +16,9 @@ from core.services.periods import ensure_open
 
 SCREEN = "stock_vouchers"
 LINE_COLUMNS = ["كود الصنف", "اسم الصنف", "الكمية", "سعر الوحدة"]
-MOVE_KIND_LABELS = STOCK_KINDS | {"purchase": "مشتريات", "purchase_return": "مرتجع مشتريات"}
+MOVE_KIND_LABELS = STOCK_KINDS | {"purchase": "مشتريات", "purchase_return": "مرتجع مشتريات", "sale": "مبيعات",
+                                  "sale_return": "مرتجع مبيعات", "production_issue": "صرف للإنتاج",
+                                  "production_output": "استلام إنتاج"}
 # Counter account per kind (the issue kind takes the user's choice).
 COUNTER_KEYS = {STOCK_OPENING: "opening_balance_equity", GIFT_OUT: "gifts_expense", COUNT_GAIN: "stock_gain",
                 COUNT_LOSS: "stock_loss"}

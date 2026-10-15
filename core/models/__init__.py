@@ -13,3 +13,7 @@ from core.models.costing import Bom, BomLine, CostRate, PriceQuote, PriceQuoteLi
 from core.models.molds import (  # noqa: F401
     Mold, MoldAmortization, MoldAmortizationLine, MoldMaintenance, MoldSettlement, MoldUsage,
 )
+from core.models.sales import SalesInvoice, SalesLine, SalesOrder, SalesOrderLine  # noqa: F401
+from core.models.production import (  # noqa: F401
+    CompoundRun, CompoundRunLine, OverheadClose, ProductionLine, ProductionOrder,
+)
