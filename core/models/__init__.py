@@ -17,3 +17,7 @@ from core.models.sales import SalesInvoice, SalesLine, SalesOrder, SalesOrderLin
 from core.models.production import (  # noqa: F401
     CompoundRun, CompoundRunLine, OverheadClose, ProductionLine, ProductionOrder,
 )
+from core.models.assets import Depreciation, DepreciationLine, FixedAsset, YearClose  # noqa: F401
+from core.models.payroll import (  # noqa: F401
+    Attendance, Employee, EmployeeAdvance, Payroll, PayrollLine,
+)

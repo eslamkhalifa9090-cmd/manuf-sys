@@ -9,9 +9,10 @@ from core.services.settings import get_settings
 from core.services.users import VIEW_MODES, set_view_mode
 from ui.common import inject_css, show_flash, view_mode
 from views import (accounts, approvals, audit_log, auth, boms, cash_vouchers, company_settings, cost_card, cost_rates,
-                   dashboard, item_card, items, journal_book, ledger, manual_journals, molds, notifications, parties,
-                   party_statement, periods, pricing, production, purchases, purchases_report, roles, sales,
-                   stock_report, stock_vouchers, system, trial_balance, users)
+                   dashboard, fixed_assets, item_card, items, journal_book, ledger, manual_journals, molds,
+                   notifications, parties, party_statement, payroll, periods, pricing, production, purchases,
+                   purchases_report, roles, sales, statements, stock_report, stock_vouchers, system, trial_balance,
+                   users)
 
 st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide",
                    initial_sidebar_state="collapsed" if view_mode() == "mobile" else "auto")
@@ -54,6 +55,18 @@ VIEWS = {
     "production_orders": production.render_production_orders,
     "overhead_close": production.render_overhead_close,
     "production_report": production.render_report,
+    "income_statement": statements.render_income_statement,
+    "balance_sheet": statements.render_balance_sheet,
+    "cash_flow": statements.render_cash_flow,
+    "integrity_checks": statements.render_checks,
+    "year_close": statements.render_year_close,
+    "fixed_assets": fixed_assets.render_register,
+    "depreciation": fixed_assets.render_depreciation,
+    "employees": payroll.render_employees,
+    "attendance": payroll.render_attendance,
+    "employee_advances": payroll.render_advances,
+    "payroll": payroll.render_payroll,
+    "payroll_report": payroll.render_report,
     "company_settings": company_settings.render,
     "users": users.render,
     "roles": roles.render,

@@ -20,6 +20,8 @@ html, body, .stApp, .stMarkdown, .stTextInput, .stSelectbox, .stButton, .stForm,
 .stApp p, .stApp li, .stApp h1, .stApp h2, .stApp h3, .stApp label, .stApp input, .stApp textarea { text-align: right; }
 /* Data grids render on a canvas that only lays out left-to-right. */
 [data-testid="stDataFrame"], [data-testid="stDataFrameResizable"], [data-testid="stDataEditor"] { direction: ltr; }
+/* Chart legends and labels are laid out left-to-right too; RTL draws the text over the symbols. */
+[data-testid="stVegaLiteChart"], [data-testid="stArrowVegaLiteChart"] { direction: ltr; }
 .stTabs [data-baseweb="tab-list"] { gap: 1.5rem; }
 h1, h2, h3 { color: #1F4E79; }
 [data-testid="stMetricValue"] { font-size: 1.6rem; }
@@ -125,7 +127,8 @@ def run_action(fn, *args, success: str | None = None, **kwargs):
 
 
 def export_buttons(df: pd.DataFrame, title: str, screen_key: str, file_stem: str,
-                   subtitle: str | None = None, totals: dict | None = None) -> None:
+                   subtitle: str | None = None, totals: dict | None = None, bold_rows: set[int] | None = None,
+                   key: str | None = None) -> None:
     """Excel and PDF download buttons, shown only with the export permission."""
     user = current_user()
     if not user.can(screen_key, "export"):
@@ -136,19 +139,21 @@ def export_buttons(df: pd.DataFrame, title: str, screen_key: str, file_stem: str
     with c1:
         st.download_button(
             "⬇️ Excel",
-            data=lambda: to_excel(df, title, settings, subtitle=subtitle, printed_by=user.full_name, totals=totals),
+            data=lambda: to_excel(df, title, settings, subtitle=subtitle, printed_by=user.full_name, totals=totals,
+                                  bold_rows=bold_rows),
             file_name=f"{file_stem}_{stamp}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"xl_{screen_key}_{file_stem}",
+            key=f"xl_{screen_key}_{key or file_stem}",
             width="stretch",
         )
     with c2:
         st.download_button(
             "⬇️ PDF",
-            data=lambda: to_pdf(df, title, settings, subtitle=subtitle, printed_by=user.full_name, totals=totals),
+            data=lambda: to_pdf(df, title, settings, subtitle=subtitle, printed_by=user.full_name, totals=totals,
+                                bold_rows=bold_rows),
             file_name=f"{file_stem}_{stamp}.pdf",
             mime="application/pdf",
-            key=f"pdf_{screen_key}_{file_stem}",
+            key=f"pdf_{screen_key}_{key or file_stem}",
             width="stretch",
         )
 
