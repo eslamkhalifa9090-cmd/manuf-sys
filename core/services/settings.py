@@ -7,9 +7,10 @@ from core.services.errors import BusinessError
 EDITABLE_FIELDS = (
     "name_ar", "name_en", "activity", "address", "phone", "email",
     "commercial_register", "tax_card", "currency", "fiscal_year_start_month", "decimals",
-    "footer_text", "signature_labels", "show_page_numbers", "show_print_date", "show_printed_by",
+    "signature_labels", "show_page_numbers", "show_print_date", "show_printed_by",
 )
-MASTER_ONLY_FIELDS = ("tax_module_enabled", "vat_rate")
+# The footer appears on every screen and report, so only the master user can change it.
+MASTER_ONLY_FIELDS = ("tax_module_enabled", "vat_rate", "footer_text")
 MAX_LOGO_BYTES = 2 * 1024 * 1024
 
 

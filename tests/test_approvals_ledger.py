@@ -81,7 +81,7 @@ def test_opening_balance_auto_balances_to_equity(master):
     assert j["kind"] == "opening" and len(j["lines"]) == 3
     eq = [l for l in j["lines"] if l["account_id"] == acc("opening_balance_equity")][0]
     assert eq["credit"] == 700
-    assert journals.journals_frame(master)["رقم القيد"].iloc[0].startswith("OB-")
+    assert journals.journals_frame(master, "opening")["رقم القيد"].iloc[0].startswith("OB-")
 
 
 def test_return_requires_note_and_notifies_creator(master, writer):

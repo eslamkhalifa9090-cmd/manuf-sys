@@ -7,10 +7,10 @@ from core.security import has_any_user, reload_user
 from core.services.notifications import unread_count
 from core.services.settings import get_settings
 from core.services.users import VIEW_MODES, set_view_mode
-from ui.common import inject_css, show_flash, view_mode
+from ui.common import inject_css, show_flash, show_footer, view_mode
 from views import (accounts, approvals, audit_log, auth, boms, cash_vouchers, company_settings, cost_card, cost_rates,
                    dashboard, fixed_assets, item_card, items, journal_book, ledger, manual_journals, molds,
-                   notifications, parties, party_statement, payroll, periods, pricing, production, purchases,
+                   notifications, opening, parties, party_statement, payroll, periods, pricing, production, purchases,
                    purchases_report, roles, sales, statements, stock_report, stock_vouchers, system, trial_balance,
                    users)
 
@@ -24,6 +24,7 @@ VIEWS = {
     "approvals": approvals.render,
     "accounts": accounts.render,
     "manual_journals": manual_journals.render,
+    "opening_balances": opening.render,
     "cash_vouchers": cash_vouchers.render,
     "journal_book": journal_book.render,
     "ledger": ledger.render,
@@ -112,6 +113,7 @@ def main() -> None:
         return
     if "user" not in st.session_state:
         auth.login_page()
+        show_footer()
         return
     # Re-read permissions every run so admin changes apply at once and disabled users are logged out.
     user = reload_user(st.session_state["user"].id)
@@ -138,6 +140,7 @@ def main() -> None:
         st.warning("لا توجد شاشات مسموح لك بها. تواصل مع مدير النظام.")
         return
     st.navigation(groups, expanded=True).run()
+    show_footer()
 
 
 main()

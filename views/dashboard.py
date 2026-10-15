@@ -13,7 +13,7 @@ MONEY = st.column_config.NumberColumn(format="%.2f")
 
 
 def _money(v: float) -> str:
-    return f"{v:,.0f}"
+    return f"{round(float(v or 0)):,}"  # int rounding never prints "-0"
 
 
 def _finance(today: date) -> None:

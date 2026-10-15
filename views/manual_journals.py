@@ -1,10 +1,10 @@
-"""Journal vouchers and opening balances: written here, posted only on approval."""
+"""Journal vouchers: written here, posted only on approval. Opening balances have their own screen."""
 from datetime import date
 
 import pandas as pd
 import streamlit as st
 
-from core.models.documents import JOURNAL_KINDS, JOURNAL_OPENING, JOURNAL_REGULAR, STATUS_LABELS
+from core.models.documents import JOURNAL_OPENING, JOURNAL_REGULAR, STATUS_LABELS
 from core.services import journals as svc, parties
 from ui.common import account_options, export_buttons, flash, guard, import_section, page_header, run_action
 
@@ -66,46 +66,42 @@ def _form(user, journal: dict | None, kind: str, key: str) -> None:
             st.rerun()
 
 
-def _list_tab(user) -> None:
-    kinds = {"الكل": None} | {v: k for k, v in JOURNAL_KINDS.items()}
-    kind = kinds[st.radio("النوع", list(kinds), horizontal=True, key="mj_kind")]
+def _list_tab(user, kind: str = JOURNAL_REGULAR, screen: str = SCREEN, prefix: str = "mj") -> None:
     df = svc.journals_frame(user, kind)
     if df.empty:
         st.info("لا توجد قيود")
         return
     st.dataframe(df.drop(columns=["id"]), hide_index=True, width="stretch",
                  column_config={"القيمة": st.column_config.NumberColumn(format="%.2f")})
-    export_buttons(df.drop(columns=["id"]), "قيود اليومية", SCREEN, "journals")
+    title = "قيود الأرصدة الافتتاحية" if kind == JOURNAL_OPENING else "قيود اليومية"
+    export_buttons(df.drop(columns=["id"]), title, screen, f"journals_{kind}")
 
     open_docs = df[df["الحالة"].isin(EDITABLE)]
-    if open_docs.empty or not (user.can(SCREEN, "edit") or user.can(SCREEN, "delete")):
+    if open_docs.empty or not (user.can(screen, "edit") or user.can(screen, "delete")):
         return
     st.divider()
     st.subheader("تعديل أو حذف قيد لم يُعتمد")
     labels = {int(r["id"]): f"{r['رقم القيد']} - {r['البيان']} ({r['الحالة']})" for _, r in open_docs.iterrows()}
-    doc_id = st.selectbox("القيد", list(labels), format_func=labels.get, key="mj_pick")
+    doc_id = st.selectbox("القيد", list(labels), format_func=labels.get, key=f"{prefix}_pick")
     journal = svc.get_journal(doc_id)
     if journal["rejection_note"]:
         st.warning(f"ملاحظة المراجع: {journal['rejection_note']}")
-    if user.can(SCREEN, "edit"):
-        _form(user, journal, journal["kind"], f"mj_edit_{doc_id}")
-    if user.can(SCREEN, "delete"):
+    if user.can(screen, "edit"):
+        _form(user, journal, journal["kind"], f"{prefix}_edit_{doc_id}")
+    if user.can(screen, "delete"):
         with st.expander("حذف القيد"):
-            if st.button("تأكيد الحذف", key=f"mj_del_{doc_id}"):
+            if st.button("تأكيد الحذف", key=f"{prefix}_del_{doc_id}"):
                 if run_action(svc.delete_journal, user, doc_id, success="تم حذف القيد"):
                     st.rerun()
 
 
 def _import_tab(user) -> None:
-    c1, c2, c3 = st.columns([1, 1, 2])
-    kind = c1.selectbox("نوع القيد", list(JOURNAL_KINDS), format_func=JOURNAL_KINDS.get, key="mj_imp_kind")
-    doc_date = c2.date_input("التاريخ", value=date.today(), key="mj_imp_date", format="YYYY-MM-DD")
-    memo = c3.text_input("البيان", key="mj_imp_memo", value="أرصدة افتتاحية" if kind == JOURNAL_OPENING else "")
-    auto = kind == JOURNAL_OPENING and st.checkbox("وازن الفرق على حساب أرصدة افتتاحية - حقوق ملكية", value=True,
-                                                   key="mj_imp_auto")
+    c1, c2 = st.columns([1, 3])
+    doc_date = c1.date_input("التاريخ", value=date.today(), key="mj_imp_date", format="YYYY-MM-DD")
+    memo = c2.text_input("البيان", key="mj_imp_memo")
     import_section(
         SCREEN, svc.lines_template(), "سطور قيد", svc.validate_lines_import,
-        lambda u, df: svc.import_journal(u, df, doc_date, memo, kind, auto),
+        lambda u, df: svc.import_journal(u, df, doc_date, memo, JOURNAL_REGULAR),
         help_text="كل الملف بيتحول لقيد واحد في انتظار الاعتماد. اكتب كود الحساب الفرعي والمبلغ في عمود مدين أو دائن. "
                   "سطور حسابي العملاء 1401 والموردين 2101 لازم يتكتب فيها اسم العميل / المورد زي ما هو مسجل.",
     )
@@ -113,19 +109,15 @@ def _import_tab(user) -> None:
 
 def render() -> None:
     user = guard(SCREEN)
-    page_header("قيود اليومية والأرصدة الافتتاحية", "كل قيد بيتحفظ في انتظار الاعتماد")
+    page_header("قيود اليومية", "كل قيد بيتحفظ في انتظار الاعتماد · الأرصدة الافتتاحية ليها شاشة لوحدها")
     tabs = ["القيود"]
     if user.can(SCREEN, "add"):
-        tabs += ["قيد يومية جديد", "أرصدة افتتاحية"]
+        tabs.append("قيد يومية جديد")
     if user.can(SCREEN, "add") and user.can(SCREEN, "import"):
         tabs.append("استيراد من Excel")
     handlers = {
         "القيود": _list_tab,
         "قيد يومية جديد": lambda u: _form(u, None, JOURNAL_REGULAR, "mj_new"),
-        "أرصدة افتتاحية": lambda u: (
-            st.info("سجّل أرصدة الحسابات في تاريخ بداية التشغيل. ممكن تعدلها بعد كده بإلغاء الاعتماد ثم التعديل."),
-            _form(u, None, JOURNAL_OPENING, "mj_open"),
-        ),
         "استيراد من Excel": _import_tab,
     }
     for tab, name in zip(st.tabs(tabs), tabs):
