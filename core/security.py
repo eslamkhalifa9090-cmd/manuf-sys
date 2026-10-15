@@ -39,6 +39,7 @@ class CurrentUser:
     is_master: bool
     role_id: int | None
     must_change_password: bool = False
+    view_mode: str = "desktop"
     # screen_key -> set of granted actions
     perms: dict[str, set[str]] = field(default_factory=dict)
 
@@ -74,6 +75,7 @@ def to_current_user(session, user: User) -> CurrentUser:
         is_master=user.is_master,
         role_id=user.role_id,
         must_change_password=user.must_change_password,
+        view_mode=user.view_mode or "desktop",
         perms=load_permissions(session, user.role_id),
     )
 

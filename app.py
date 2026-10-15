@@ -6,13 +6,15 @@ from core.screens import SCREENS
 from core.security import has_any_user, reload_user
 from core.services.notifications import unread_count
 from core.services.settings import get_settings
-from ui.common import inject_css, show_flash
+from core.services.users import VIEW_MODES, set_view_mode
+from ui.common import inject_css, show_flash, view_mode
 from views import (accounts, approvals, audit_log, auth, boms, cash_vouchers, company_settings, cost_card, cost_rates,
-                   dashboard, item_card, items, journal_book, ledger, manual_journals, notifications, parties,
+                   dashboard, item_card, items, journal_book, ledger, manual_journals, molds, notifications, parties,
                    party_statement, periods, pricing, purchases, purchases_report, roles, stock_report, stock_vouchers,
                    system, trial_balance, users)
 
-st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide",
+                   initial_sidebar_state="collapsed" if view_mode() == "mobile" else "auto")
 inject_css()
 
 VIEWS = {
@@ -38,6 +40,12 @@ VIEWS = {
     "cost_rates": cost_rates.render,
     "pricing": pricing.render,
     "cost_card": cost_card.render,
+    "molds": molds.render_register,
+    "mold_usage": molds.render_usage,
+    "mold_maintenance": molds.render_maintenance,
+    "mold_amortization": molds.render_amortization,
+    "mold_settlement": molds.render_settlement,
+    "mold_report": molds.render_report,
     "company_settings": company_settings.render,
     "users": users.render,
     "roles": roles.render,
@@ -66,6 +74,11 @@ def _sidebar(user) -> None:
         c1, c2 = st.columns(2)
         if c1.button("كلمة المرور", width="stretch"):
             auth.change_password_dialog(user)
+        other = "desktop" if view_mode() == "mobile" else "mobile"
+        if st.button(("🖥️ " if other == "desktop" else "📱 ") + f"عرض ال{VIEW_MODES[other]}", width="stretch"):
+            set_view_mode(user.id, other)
+            auth.set_view_mode(other)
+            st.rerun()
         if c2.button("خروج", width="stretch"):
             st.session_state.clear()
             st.rerun()
@@ -85,6 +98,8 @@ def main() -> None:
         st.session_state.clear()
         st.rerun()
     st.session_state["user"] = user
+    if st.query_params.get("view") != view_mode():
+        st.query_params["view"] = view_mode()  # keep the layout in the link across pages and reloads
     if user.must_change_password:
         auth.change_password_form(user, forced=True)
         return

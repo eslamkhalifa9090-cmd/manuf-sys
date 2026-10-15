@@ -115,6 +115,8 @@ class PurchaseLine(Base):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("purchase_invoices.id", ondelete="CASCADE"), index=True)
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"))
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"))
+    # A line on the molds asset account names the mold it buys; its net amount adds to that mold's cost.
+    mold_id: Mapped[int | None] = mapped_column(ForeignKey("molds.id", ondelete="RESTRICT"))
     description: Mapped[str | None] = mapped_column(String(255))
     qty: Mapped[float] = mapped_column(Qty, default=1)
     unit_price: Mapped[float] = mapped_column(UnitCost, default=0)

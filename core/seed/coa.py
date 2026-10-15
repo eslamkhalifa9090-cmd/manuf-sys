@@ -120,6 +120,7 @@ ACCOUNTS = [
     ("5206", "سولار ماكينات ومعدات", "Machine diesel", "factory_diesel", False),
     ("5207", "إهلاك ماكينات المصنع", "Factory depreciation", "dep_factory", False),
     ("5208", "تكاليف صناعية أخرى", "Other factory overhead", "factory_other", False),
+    ("5209", "استهلاك أسطمبات", "Mold amortization", "mold_amortization", False),
     ("53", "التكاليف التحويلية المحملة", "Applied conversion costs", None, True),
     ("5301", "تكاليف تحويلية محملة على الإنتاج", "Conversion costs applied to production", "applied_conversion", True),
     ("54", "تكاليف وخسائر إنتاج أخرى", "Other production costs and losses", None, False),

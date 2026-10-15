@@ -43,6 +43,8 @@ class User(Base):
     is_master: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Screen layout the user last chose at sign-in: desktop or mobile.
+    view_mode: Mapped[str] = mapped_column(String(10), default="desktop")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     last_login: Mapped[datetime | None] = mapped_column(DateTime)
 

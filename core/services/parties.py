@@ -72,12 +72,18 @@ def save_party(actor, party_id: int | None, name: str, kind: str, phone: str = "
 
 def _has_postings(session, party_id: int) -> bool:
     from core.models import CashVoucher, ManualJournalLine, PurchaseInvoice, StockVoucher
+    from core.models.costing import PriceQuote
+    from core.models.molds import Mold, MoldMaintenance, MoldSettlement
 
     checks = [select(JournalLine.id).where(JournalLine.party_id == party_id),
               select(ManualJournalLine.id).where(ManualJournalLine.party_id == party_id),
               select(CashVoucher.id).where(CashVoucher.party_id == party_id),
               select(PurchaseInvoice.id).where(PurchaseInvoice.party_id == party_id),
-              select(StockVoucher.id).where(StockVoucher.party_id == party_id)]
+              select(StockVoucher.id).where(StockVoucher.party_id == party_id),
+              select(PriceQuote.id).where(PriceQuote.party_id == party_id),
+              select(Mold.id).where((Mold.supplier_id == party_id) | (Mold.customer_id == party_id)),
+              select(MoldMaintenance.id).where(MoldMaintenance.party_id == party_id),
+              select(MoldSettlement.id).where(MoldSettlement.party_id == party_id)]
     return any(session.scalar(q.limit(1)) is not None for q in checks)
 
 

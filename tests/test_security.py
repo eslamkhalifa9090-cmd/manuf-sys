@@ -79,3 +79,16 @@ def test_column_select_all_and_row_all_recomputed():
     df = pm.set_column(df, "view", True)
     assert bool(df.iloc[1][pm.ROW_ALL])  # settings: view + edit is everything it has
     assert not bool(df.iloc[0][pm.ROW_ALL])
+
+
+def test_view_mode_is_remembered_per_user(master):
+    from core.security import authenticate
+    from core.services import users
+    from core.services.errors import BusinessError
+
+    assert master.view_mode == "desktop"
+    users.set_view_mode(master.id, "mobile")
+    assert authenticate("admin", "secret123").view_mode == "mobile"
+    import pytest
+    with pytest.raises(BusinessError):
+        users.set_view_mode(master.id, "tablet")

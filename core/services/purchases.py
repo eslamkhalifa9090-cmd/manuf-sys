@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from core.db import session_scope
 from core.models import Account, Item, Party, PurchaseInvoice, PurchaseLine, User
+from core.models.molds import AMORTIZED, Mold
 from core.models.inventory import CASH, CREDIT, PAYMENT_TERMS, PURCHASE_INVOICE, PURCHASE_KINDS, PURCHASE_RETURN
 from core.models.parties import BOTH, SUPPLIER
 from core.services import approval, audit, stock
@@ -83,8 +84,18 @@ def save_invoice(actor, invoice_id: int | None, kind: str, doc_date: date, party
                     raise BusinessError(f"السطر {i}: اختار حساب فرعي نشط")
                 if acc.system_key in approval.PARTY_ACCOUNTS or acc.code.startswith("13"):
                     raise BusinessError(f"السطر {i}: الأصناف المخزنية تتسجل كصنف مش كحساب")
+            mold_id = l.get("mold_id") or None
+            if account_id and acc.system_key == "mold_asset" and not mold_id:
+                raise BusinessError(f"السطر {i}: اختار الأسطمبة اللي اتشترت على حساب الأسطمبات")
+            if mold_id:
+                mold = s.get(Mold, mold_id)
+                if not account_id or acc.system_key != "mold_asset":
+                    raise BusinessError(f"السطر {i}: الأسطمبة تتربط بس بسطر على حساب الأسطمبات (1106)")
+                if mold is None or mold.ownership not in AMORTIZED:
+                    raise BusinessError(f"السطر {i}: الأسطمبة لازم تكون ملك المصنع")
             clean.append(PurchaseLine(item_id=item_id or None, account_id=account_id or None, qty=qty,
-                                      unit_price=price, description=(l.get("description") or "").strip() or None))
+                                      unit_price=price, mold_id=mold_id,
+                                      description=(l.get("description") or "").strip() or None))
         if not clean:
             raise BusinessError("الفاتورة لازم يكون فيها سطر واحد على الأقل")
         total = r2(sum(l.amount for l in clean))
@@ -137,7 +148,7 @@ def get_invoice(invoice_id: int) -> dict:
             "supplier_ref": d.supplier_ref or "", "memo": d.memo or "", "status": d.status,
             "rejection_note": d.rejection_note, "created_by_id": d.created_by_id,
             "lines": [{"item_id": l.item_id, "account_id": l.account_id, "qty": l.qty, "unit_price": l.unit_price,
-                       "description": l.description or ""} for l in d.lines],
+                       "mold_id": l.mold_id, "description": l.description or ""} for l in d.lines],
         }
 
 

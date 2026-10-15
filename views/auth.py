@@ -7,6 +7,7 @@ from core.security import authenticate
 from core.services import users as user_svc
 from core.services.errors import BusinessError
 from core.services.settings import get_settings
+from ui.common import view_mode
 
 MAX_ATTEMPTS = 5
 LOCK_SECONDS = 60
@@ -56,6 +57,11 @@ def login_page() -> None:
         with st.form("login"):
             username = st.text_input("اسم المستخدم")
             password = st.text_input("كلمة المرور", type="password")
+            modes = list(user_svc.VIEW_MODES)
+            asked = st.query_params.get("view")
+            mode = st.radio("طريقة العرض", modes, format_func=user_svc.VIEW_MODES.get, horizontal=True,
+                            index=modes.index(asked) if asked in modes else None,
+                            help="لو سبتها فاضية هيفتح بآخر طريقة اخترتها")
             if st.form_submit_button("دخول", type="primary"):
                 user = authenticate(username, password)
                 if user is None:
@@ -67,6 +73,10 @@ def login_page() -> None:
                     st.error("اسم المستخدم أو كلمة المرور غير صحيحة")
                 else:
                     st.session_state["login_attempts"] = 0
+                    if mode:
+                        user_svc.set_view_mode(user.id, mode)
+                        user.view_mode = mode
+                    set_view_mode(user.view_mode)
                     st.session_state["user"] = user
                     st.rerun()
 
@@ -96,3 +106,9 @@ def change_password_form(user, forced: bool = False) -> None:
 @st.dialog("تغيير كلمة المرور")
 def change_password_dialog(user) -> None:
     change_password_form(user)
+
+
+def set_view_mode(mode: str) -> None:
+    """Apply a layout now and keep it in the link, so a phone's bookmark opens in the same layout."""
+    st.session_state["view_mode"] = mode
+    st.query_params["view"] = mode
