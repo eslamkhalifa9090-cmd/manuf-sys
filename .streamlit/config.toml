@@ -1,0 +1,13 @@
+[client]
+# Hide the developer menu (source, rerun, deploy) from every user.
+toolbarMode = "viewer"
+# Never show tracebacks or source lines in the browser; they go to the server log only.
+showErrorDetails = "none"
+
+[server]
+runOnSave = false
+maxUploadSize = 50
+
+[theme]
+primaryColor = "#1F4E79"
+font = "sans serif"

@@ -1,0 +1,10 @@
+streamlit>=1.50
+sqlalchemy>=2.0
+pandas>=2.2
+openpyxl>=3.1
+bcrypt>=4.1
+reportlab>=4.2
+arabic-reshaper>=3.0
+python-bidi>=0.4
+plotly>=5.22
+pytest>=8.0
