@@ -182,6 +182,20 @@ class Plan:
         return r2(self.debit - self.credit + self.stock_value)
 
 
+# Column sizes in the database; a longer value would stop the import half way on PostgreSQL.
+LIMITS = {"parties": {"الاسم": 150, "التليفون": 60, "العنوان": 255},
+          "stock": {"كود الصنف": 30, "اسم الصنف": 150, "الوحدة": 20},
+          "assets": {"كود الأصل": 20, "اسم الأصل": 150},
+          "molds": {"كود الأسطمبة": 20, "اسم الأسطمبة": 150}}
+
+
+def _too_long(sheet: str, r: dict) -> str | None:
+    for col, n in LIMITS.get(sheet, {}).items():
+        if len(_text(r.get(col))) > n:
+            return f"{col} أطول من {n} حرف"
+    return None
+
+
 def _mark(df: pd.DataFrame, status: list[str], note: list[str] | None = None) -> pd.DataFrame:
     df = df.copy()
     df["الحالة"] = status
@@ -247,7 +261,9 @@ def plan(frames: dict[str, pd.DataFrame], as_of: date) -> Plan:
         dr, cr = _num(r["مدين"]), _num(r["دائن"])
         existing = party_by_name.get(name.lower())
         kind = PARTY_BY_LABEL.get(kind_label)
-        if not name:
+        if long := _too_long("parties", r):
+            status.append(long)
+        elif not name:
             status.append("الاسم مطلوب")
         elif name.lower() in seen:
             status.append("الاسم متكرر في الشيت")
@@ -278,7 +294,9 @@ def plan(frames: dict[str, pd.DataFrame], as_of: date) -> Plan:
         item = items_by_code.get(code) if code else None
         item = item or (items_by_name.get(name.lower()) if name else None)
         ident = (item.id if item else None) or (code or name).lower()
-        if not (code or name):
+        if long := _too_long("stock", r):
+            status.append(long)
+        elif not (code or name):
             status.append("اكتب كود الصنف أو اسمه")
         elif ident in seen:
             status.append("الصنف متكرر في الشيت")
@@ -307,7 +325,9 @@ def plan(frames: dict[str, pd.DataFrame], as_of: date) -> Plan:
         acquired = _date(r["تاريخ الشراء"])
         cost, salvage, life, acc = (_num(r["التكلفة"]), _num(r["الخردة"]), _num(r["العمر بالشهور"]),
                                     _num(r["مجمع الإهلاك"]))
-        if not name:
+        if long := _too_long("assets", r):
+            status.append(long)
+        elif not name:
             status.append("اسم الأصل مطلوب")
         elif name.lower() in asset_names or name.lower() in seen:
             status.append("الأصل مسجل قبل كده")
@@ -349,7 +369,9 @@ def plan(frames: dict[str, pd.DataFrame], as_of: date) -> Plan:
         cav, life, salvage, cost, acc, used = (_num(r["التجاويف"]), _num(r["العمر الافتراضي"]), _num(r["الخردة"]),
                                                _num(r["التكلفة"]), _num(r["مجمع الاستهلاك"]),
                                                _num(r["المستهلك قبل البداية"]))
-        if not name:
+        if long := _too_long("molds", r):
+            status.append(long)
+        elif not name:
             status.append("اسم الأسطمبة مطلوب")
         elif name.lower() in mold_names or name.lower() in seen:
             status.append("الأسطمبة مسجلة قبل كده")
