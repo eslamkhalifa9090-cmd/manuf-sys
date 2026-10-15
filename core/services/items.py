@@ -104,12 +104,17 @@ def _next_code(session) -> str:
 
 
 def save_item(actor, item_id: int | None, name: str, group_id: int, unit: str, code: str = "", family: str = "",
-              min_qty: float = 0, notes: str = "", is_active: bool = True) -> int:
+              min_qty: float = 0, notes: str = "", is_active: bool = True, pieces_per_unit: float = 1,
+              piece_weight_g: float | None = None) -> int:
     name, code = (name or "").strip(), (code or "").strip()
     if not name:
         raise BusinessError("اسم الصنف مطلوب")
     if not (unit or "").strip():
         raise BusinessError("الوحدة مطلوبة")
+    if float(pieces_per_unit or 0) <= 0:
+        raise BusinessError("عدد القطع في الوحدة لازم يكون أكبر من صفر")
+    if piece_weight_g is not None and float(piece_weight_g) < 0:
+        raise BusinessError("وزن القطعة مينفعش يكون بالسالب")
     with session_scope() as s:
         if s.get(ItemGroup, group_id) is None:
             raise BusinessError("اختار المجموعة")
@@ -141,6 +146,7 @@ def save_item(actor, item_id: int | None, name: str, group_id: int, unit: str, c
         it.name, it.group_id, it.unit = name, group_id, unit.strip()
         it.family, it.min_qty = (family or "").strip() or None, float(min_qty or 0)
         it.notes, it.is_active = (notes or "").strip() or None, is_active
+        it.pieces_per_unit, it.piece_weight_g = float(pieces_per_unit), float(piece_weight_g or 0) or None
         s.flush()
         audit.log(s, actor, "create" if item_id is None else "update", "item", it.id, {"code": it.code, "name": name})
         return it.id
@@ -149,7 +155,7 @@ def save_item(actor, item_id: int | None, name: str, group_id: int, unit: str, c
 def delete_item(actor, item_id: int) -> None:
     if not actor.can(SCREEN, "delete"):
         raise BusinessError("ليس لديك صلاحية الحذف")
-    from core.models import PurchaseLine, StockVoucherLine
+    from core.models import Bom, BomLine, PriceQuote, PriceQuoteLine, PurchaseLine, StockVoucherLine
 
     with session_scope() as s:
         it = s.get(Item, item_id)
@@ -160,6 +166,14 @@ def delete_item(actor, item_id: int) -> None:
                   select(StockVoucherLine.id).where(StockVoucherLine.item_id == item_id)):
             if s.scalar(q.limit(1)) is not None:
                 raise BusinessError("الصنف عليه حركات أو مستندات؛ أوقفه بدلاً من الحذف")
+        for q in (select(BomLine.id).where(BomLine.component_id == item_id),
+                  select(PriceQuote.id).where(PriceQuote.item_id == item_id),
+                  select(PriceQuoteLine.id).where(PriceQuoteLine.component_id == item_id)):
+            if s.scalar(q.limit(1)) is not None:
+                raise BusinessError("الصنف داخل في تركيبة أو عرض سعر؛ أوقفه بدلاً من الحذف")
+        bom = s.scalar(select(Bom).where(Bom.item_id == item_id))
+        if bom is not None:
+            s.delete(bom)
         audit.log(s, actor, "delete", "item", it.id, {"code": it.code, "name": it.name})
         s.delete(it)
 
@@ -178,10 +192,12 @@ def items_frame() -> pd.DataFrame:
     with session_scope() as s:
         q = select(Item, ItemGroup).join(ItemGroup, ItemGroup.id == Item.group_id).order_by(Item.code)
         rows = [{"id": it.id, "الكود": it.code, "اسم الصنف": it.name, "المجموعة": g.name, "الوحدة": it.unit,
-                 "البند / العائلة": it.family or "", "حد الطلب": it.min_qty, "نشط": it.is_active, "ملاحظات": it.notes or ""}
+                 "البند / العائلة": it.family or "", "حد الطلب": it.min_qty,
+                 "قطع في الوحدة": float(it.pieces_per_unit or 1), "وزن القطعة (جم)": it.piece_weight_g,
+                 "نشط": it.is_active, "ملاحظات": it.notes or ""}
                 for it, g in s.execute(q)]
     return pd.DataFrame(rows, columns=["id", "الكود", "اسم الصنف", "المجموعة", "الوحدة", "البند / العائلة", "حد الطلب",
-                                       "نشط", "ملاحظات"])
+                                       "قطع في الوحدة", "وزن القطعة (جم)", "نشط", "ملاحظات"])
 
 
 # ---------- Excel import ----------

@@ -7,9 +7,10 @@ from core.security import has_any_user, reload_user
 from core.services.notifications import unread_count
 from core.services.settings import get_settings
 from ui.common import inject_css, show_flash
-from views import (accounts, approvals, audit_log, auth, cash_vouchers, company_settings, dashboard, item_card, items,
-                   journal_book, ledger, manual_journals, notifications, parties, party_statement, periods,
-                   purchases, purchases_report, roles, stock_report, stock_vouchers, system, trial_balance, users)
+from views import (accounts, approvals, audit_log, auth, boms, cash_vouchers, company_settings, cost_card, cost_rates,
+                   dashboard, item_card, items, journal_book, ledger, manual_journals, notifications, parties,
+                   party_statement, periods, pricing, purchases, purchases_report, roles, stock_report, stock_vouchers,
+                   system, trial_balance, users)
 
 st.set_page_config(page_title="manuf-sys", page_icon="🏭", layout="wide")
 inject_css()
@@ -33,6 +34,10 @@ VIEWS = {
     "stock_report": stock_report.render,
     "item_card": item_card.render,
     "purchases_report": purchases_report.render,
+    "boms": boms.render,
+    "cost_rates": cost_rates.render,
+    "pricing": pricing.render,
+    "cost_card": cost_card.render,
     "company_settings": company_settings.render,
     "users": users.render,
     "roles": roles.render,
