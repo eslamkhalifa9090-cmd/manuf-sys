@@ -8,6 +8,7 @@ from core.models.accounting import ACCOUNT_TYPES, NORMAL_SIDE, PL_SECTIONS, STAT
 from core.seed.coa import ACCOUNTS, CLASSES, GROUP_SECTIONS
 from core.services import audit
 from core.services.errors import BusinessError
+from core.services.ledger import account_in_use
 
 # Column headers of the import template, in order.
 IMPORT_COLUMNS = ["كود الحساب", "اسم الحساب", "الاسم بالإنجليزية", "كود الحساب الأب"]
@@ -134,8 +135,9 @@ def create_account(actor, parent_id: int, name_ar: str, name_en: str | None = No
         if s.scalar(select(Account.id).where(Account.code == code)):
             raise BusinessError(f"الكود {code} مستخدم")
         if parent.is_postable:
-            # A leaf that gets a child becomes a header; it must not carry postings then.
-            # TODO(phase 1): refuse when the parent already has journal lines.
+            # A leaf that gets a child becomes a header, and headers never carry postings.
+            if account_in_use(s, parent.id):
+                raise BusinessError(f"الحساب {parent.code} عليه حركات، ولا يمكن تحويله لحساب رئيسي")
             parent.is_postable = False
         acc = Account(
             code=code, name_ar=name_ar, name_en=(name_en or "").strip() or None, parent=parent,
@@ -173,7 +175,8 @@ def delete_account(actor, account_id: int) -> None:
             raise BusinessError("لا يمكن حذف حساب نظامي")
         if acc.children:
             raise BusinessError("لا يمكن حذف حساب له حسابات فرعية")
-        # TODO(phase 1): refuse when the account has journal lines.
+        if account_in_use(s, acc.id):
+            raise BusinessError("لا يمكن حذف حساب عليه حركات. أوقفه بدلاً من الحذف.")
         parent = acc.parent
         audit.log(s, actor, "delete", "account", acc.id, {"code": acc.code, "name": acc.name_ar})
         s.delete(acc)

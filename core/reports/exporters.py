@@ -84,7 +84,8 @@ def _footer_lines(settings, printed_by: str | None) -> list[str]:
 # ---------------------------------------------------------------- Excel
 
 def to_excel(df: pd.DataFrame, title: str, settings, subtitle: str | None = None,
-             printed_by: str | None = None, sheet_name: str = "تقرير", include_footer: bool = True) -> bytes:
+             printed_by: str | None = None, sheet_name: str = "تقرير", include_footer: bool = True,
+             totals: dict | None = None) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = sheet_name[:31]
@@ -150,6 +151,17 @@ def to_excel(df: pd.DataFrame, title: str, settings, subtitle: str | None = None
         ws.auto_filter.ref = f"A{start_row}:{last_col}{start_row + len(df)}"
 
     row = start_row + len(df) + 2
+    if totals:
+        trow = start_row + len(df) + 1
+        for j, col in enumerate(df.columns, start=1):
+            value = totals.get(col, "الإجمالي" if j == 1 else None)
+            cell = ws.cell(row=trow, column=j, value=value)
+            cell.font = Font(bold=True)
+            cell.border = border
+            cell.fill = PatternFill("solid", fgColor="DDEBF7")
+            if isinstance(value, float):
+                cell.number_format = num_format
+        row += 1
     for line in _footer_lines(settings, printed_by) if include_footer else []:
         ws.cell(row=row, column=1, value=line).font = Font(italic=True, size=9, color="555555")
         row += 1

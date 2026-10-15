@@ -168,7 +168,7 @@ def permission_matrix(role_id: int) -> pd.DataFrame:
         existing = {p.screen_key: p for p in s.scalars(select(RolePermission).where(RolePermission.role_id == role_id))}
     rows = []
     for sc in SCREENS:
-        if sc.master_only:
+        if sc.master_only or sc.public:
             continue
         p = existing.get(sc.key)
         row = {"screen_key": sc.key, "الوحدة": sc.module, "الشاشة": sc.title}
@@ -187,7 +187,7 @@ def save_permission_matrix(actor, role_id: int, matrix: pd.DataFrame) -> None:
         existing = {p.screen_key: p for p in s.scalars(select(RolePermission).where(RolePermission.role_id == role_id))}
         for rec in matrix.to_dict("records"):
             screen = BY_KEY.get(rec["screen_key"])
-            if screen is None or screen.master_only:
+            if screen is None or screen.master_only or screen.public:
                 continue
             p = existing.get(screen.key)
             if p is None:
