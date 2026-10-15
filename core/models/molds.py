@@ -76,6 +76,10 @@ class MoldUsage(Base):
     pieces: Mapped[float] = mapped_column(Qty)
     units: Mapped[float] = mapped_column(Qty)
     item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"))
+    # Written by an approved production order, which carries its own amortization (Dr 1303);
+    # the monthly amortization document covers only usage typed in by hand.
+    production_order_id: Mapped[int | None] = mapped_column(ForeignKey("production_orders.id", ondelete="CASCADE"),
+                                                            index=True)
     memo: Mapped[str | None] = mapped_column(String(255))
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

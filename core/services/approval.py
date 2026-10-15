@@ -124,7 +124,14 @@ def approve(actor, doc_type: str, doc_id: int) -> int:
         if doc.status != PENDING:
             raise BusinessError(f"{doc.doc_no}: المستند ليس في انتظار الاعتماد")
         ensure_open(s, doc.doc_date)
-        lines = drop_zero(dt.build_lines(s, doc))
+        if doc.status == APPROVED and getattr(doc, "journal_entry_id", None):
+            # What was posted; stock-costed documents would not rebuild the same once the goods moved.
+            lines = [PostingLine(l.account_id, debit=float(l.debit or 0), credit=float(l.credit or 0), memo=l.memo,
+                                 party_id=l.party_id)
+                     for l in s.scalars(select(JournalLine).where(JournalLine.entry_id == doc.journal_entry_id)
+                                        .order_by(JournalLine.id))]
+        else:
+            lines = drop_zero(dt.build_lines(s, doc))
         entry = None
         # A document whose every line is worth zero (free samples) moves stock without an entry.
         if lines or dt.on_post is None:
@@ -234,7 +241,14 @@ def preview(doc_type: str, doc_id: int) -> pd.DataFrame:
         dt, doc = _doc(s, doc_type, doc_id)
         from core.models import Party
 
-        lines = drop_zero(dt.build_lines(s, doc))
+        if doc.status == APPROVED and getattr(doc, "journal_entry_id", None):
+            # What was posted; stock-costed documents would not rebuild the same once the goods moved.
+            lines = [PostingLine(l.account_id, debit=float(l.debit or 0), credit=float(l.credit or 0), memo=l.memo,
+                                 party_id=l.party_id)
+                     for l in s.scalars(select(JournalLine).where(JournalLine.entry_id == doc.journal_entry_id)
+                                        .order_by(JournalLine.id))]
+        else:
+            lines = drop_zero(dt.build_lines(s, doc))
         accounts = {a.id: a for a in s.scalars(select(Account).where(Account.id.in_([l.account_id for l in lines])))}
         parties = {p.id: p.name for p in s.scalars(select(Party).where(Party.id.in_([l.party_id for l in lines if l.party_id])))}
         return pd.DataFrame([

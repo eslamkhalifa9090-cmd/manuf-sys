@@ -74,6 +74,7 @@ def _has_postings(session, party_id: int) -> bool:
     from core.models import CashVoucher, ManualJournalLine, PurchaseInvoice, StockVoucher
     from core.models.costing import PriceQuote
     from core.models.molds import Mold, MoldMaintenance, MoldSettlement
+    from core.models.sales import SalesInvoice, SalesOrder
 
     checks = [select(JournalLine.id).where(JournalLine.party_id == party_id),
               select(ManualJournalLine.id).where(ManualJournalLine.party_id == party_id),
@@ -83,7 +84,9 @@ def _has_postings(session, party_id: int) -> bool:
               select(PriceQuote.id).where(PriceQuote.party_id == party_id),
               select(Mold.id).where((Mold.supplier_id == party_id) | (Mold.customer_id == party_id)),
               select(MoldMaintenance.id).where(MoldMaintenance.party_id == party_id),
-              select(MoldSettlement.id).where(MoldSettlement.party_id == party_id)]
+              select(MoldSettlement.id).where(MoldSettlement.party_id == party_id),
+              select(SalesOrder.id).where(SalesOrder.party_id == party_id),
+              select(SalesInvoice.id).where(SalesInvoice.party_id == party_id)]
     return any(session.scalar(q.limit(1)) is not None for q in checks)
 
 
