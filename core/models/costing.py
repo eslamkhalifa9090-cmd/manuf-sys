@@ -100,6 +100,10 @@ Q_ACCEPTED = "accepted"
 Q_REJECTED = "rejected"
 QUOTE_STATUSES = {Q_DRAFT: "مسودة", Q_SENT: "اتبعت للعميل", Q_ACCEPTED: "اتقبل", Q_REJECTED: "اترفض"}
 
+ENTRY_PIECE = "piece"
+ENTRY_ORDER = "order"
+ENTRY_BASES = {ENTRY_PIECE: "للقطعة", ENTRY_ORDER: "لإجمالي الطلبية"}
+
 
 class PriceQuote(Base):
     __tablename__ = "price_quotes"
@@ -118,6 +122,8 @@ class PriceQuote(Base):
     pieces_per_unit: Mapped[float] = mapped_column(Qty, default=1)
     piece_weight_g: Mapped[float | None] = mapped_column(Qty)
     method: Mapped[str] = mapped_column(String(10), default=WAC)
+    # How quantities and conversion costs were typed in; they are always stored per piece.
+    entry_basis: Mapped[str] = mapped_column(String(10), default=ENTRY_PIECE)
     waste_pct: Mapped[float] = mapped_column(Pct, default=0)
     wages: Mapped[float] = mapped_column(UnitCost, default=0)
     energy: Mapped[float] = mapped_column(UnitCost, default=0)
@@ -157,6 +163,8 @@ class PriceQuoteLine(Base):
     component_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"))
     # Quantity per piece in the component's own unit (grams already converted to kilos).
     qty: Mapped[float] = mapped_column(UnitCost)
+    # The quantity was typed in grams (shown again in grams when the quote is reopened).
+    in_grams: Mapped[bool] = mapped_column(Boolean, default=False)
     wac_price: Mapped[float] = mapped_column(UnitCost, default=0)
     last_price: Mapped[float] = mapped_column(UnitCost, default=0)
     manual_price: Mapped[float] = mapped_column(UnitCost, default=0)

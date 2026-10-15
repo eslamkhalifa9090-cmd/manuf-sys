@@ -4,8 +4,9 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from core.models.costing import (BASES, ENERGY, GA, MAINTENANCE, METHODS, MOLD_LIFE, MOLD_MODES, MOLD_NONE, OTHER, PCT,
-                                 Q_ACCEPTED, QUOTE_STATUSES, SELLING, WAGES)
+from core.models.costing import (BASES, ENERGY, ENTRY_BASES, ENTRY_ORDER, ENTRY_PIECE, GA, MAINTENANCE, METHODS,
+                                 MOLD_LIFE, MOLD_MODES, MOLD_NONE, OTHER, PCT, Q_ACCEPTED, QUOTE_STATUSES, SELLING,
+                                 WAGES)
 from core.models.parties import CUSTOMER
 from core.services import boms, cost_rates, items, parties, quotes as svc
 from ui.common import export_buttons, flash, guard, page_header, run_action
@@ -16,28 +17,49 @@ PRICE = st.column_config.NumberColumn(format="%.4f")
 CONV = ((WAGES, "wages"), (ENERGY, "energy"), (MAINTENANCE, "maintenance"), (OTHER, "other"))
 
 
-def _lines_editor(key: str, base: list[dict], comp_opts: dict) -> list[dict]:
-    rows = [{"الخامة": comp_opts.get(l["component_id"]), "الكمية للقطعة": l["qty"], "السعر اليدوي": l["manual_price"]}
-            for l in base] or [{"الخامة": None, "الكمية للقطعة": None, "السعر اليدوي": None}] * 2
-    df = pd.DataFrame(rows).astype({"الكمية للقطعة": "float", "السعر اليدوي": "float"})
+def _lines_editor(key: str, base: list[dict], comp_opts: dict, factor: float, order: bool) -> list[dict]:
+    """Materials grid. `factor` turns a per-piece quantity into what is typed (x pieces for the whole order).
+
+    The starting rows are kept in session state so that changing the order quantity later does not
+    rewrite what was already typed; in whole-order mode the typed totals are divided by the new pieces.
+    """
+    qty_col = "الكمية للطلبية كلها" if order else "الكمية للقطعة"
+    if f"{key}_rows" not in st.session_state:
+        units = boms.item_labels([l["component_id"] for l in base]) if base else {}
+        rows = []
+        for l in base:
+            g = boms.grams_per_unit(units.get(l["component_id"], ("", ""))[1]) if l.get("in_grams") else None
+            typed = l["qty"] * factor * (g or 1)
+            rows.append({"الخامة": comp_opts.get(l["component_id"]), qty_col: round(typed, 6), "بالجرام": bool(g),
+                         "السعر اليدوي": l["manual_price"]})
+        st.session_state[f"{key}_rows"] = rows or [{"الخامة": None, qty_col: None, "بالجرام": True,
+                                                    "السعر اليدوي": None}] * 2
+    df = pd.DataFrame(st.session_state[f"{key}_rows"]).astype({qty_col: "float", "بالجرام": "bool",
+                                                              "السعر اليدوي": "float"})
     edited = st.data_editor(
         # The editable grid lays out left to right; reverse so the first column sits on the right.
         df[df.columns[::-1]], key=key, num_rows="dynamic", hide_index=True, width="stretch",
         column_config={
             "الخامة": st.column_config.SelectboxColumn(options=list(comp_opts.values()), width="large"),
-            "الكمية للقطعة": st.column_config.NumberColumn(min_value=0.0, format="%.4f",
-                                                          help="بوحدة الخامة: 150 جرام من خامة بالكيلو = 0.15"),
+            qty_col: st.column_config.NumberColumn(min_value=0.0, format="%.4f",
+                                                  help="بالجرام لو العلامة متعلمة، وإلا بوحدة الخامة"),
+            "بالجرام": st.column_config.CheckboxColumn(help="للخامات اللي بالكيلو أو الجرام بس"),
             "السعر اليدوي": st.column_config.NumberColumn(min_value=0.0, format="%.4f",
-                                                         help="سعر الوحدة اللي عايز تسعّر بيه في عمود «يدوي»"),
+                                                         help="سعر وحدة الخامة اللي عايز تسعّر بيه في عمود «يدوي»"),
         },
     )
     ids = {v: k for k, v in comp_opts.items()}
+    records = [r for r in edited.to_dict("records") if ids.get(r["الخامة"]) is not None]
+    units = boms.item_labels([ids[r["الخامة"]] for r in records]) if records else {}
     out = []
-    for r in edited.to_dict("records"):
-        cid = ids.get(r["الخامة"])
-        if cid is None:
-            continue
-        out.append({"component_id": cid, "qty": r["الكمية للقطعة"] if pd.notna(r["الكمية للقطعة"]) else 0,
+    for r in records:
+        cid = ids[r["الخامة"]]
+        typed = float(r[qty_col]) if pd.notna(r[qty_col]) else 0.0
+        grams = bool(r["بالجرام"]) if pd.notna(r["بالجرام"]) else False
+        g = boms.grams_per_unit(units[cid][1]) if grams else None
+        if grams and g is None:
+            st.warning(f"«{units[cid][0]}» وحدته {units[cid][1]}؛ كميته اتحسبت بوحدته مش بالجرام")
+        out.append({"component_id": cid, "qty": typed / (g or 1) / factor, "in_grams": bool(g),
                     "manual_price": r["السعر اليدوي"] if pd.notna(r["السعر اليدوي"]) else None})
     return out
 
@@ -56,7 +78,8 @@ def _priced(lines: list[dict], snapshot: dict[int, dict], refresh: bool) -> list
             wac, last = snapshot[cid]["wac_price"], snapshot[cid]["last_price"]
         manual = l["manual_price"] if l["manual_price"] is not None else (last or wac)
         name, unit = names.get(cid, ("", ""))
-        out.append({"component_id": cid, "name": name, "unit": unit, "qty": float(l["qty"] or 0), "wac_price": wac,
+        out.append({"component_id": cid, "name": name, "unit": unit, "qty": float(l["qty"] or 0),
+                    "in_grams": l.get("in_grams", False), "wac_price": wac,
                     "last_price": last, "manual_price": float(manual)})
     return out
 
@@ -108,34 +131,52 @@ def _form(user, quote: dict | None, key: str) -> None:
     method = c7.radio("الطريقة المعتمدة في العرض", methods, format_func=METHODS.get, key=f"{k}_method",
                       index=methods.index(v.get("method", methods[0])))
 
-    st.markdown("##### الخامات للقطعة")
+    bases = list(ENTRY_BASES)
+    basis = st.radio("طريقة إدخال الكميات والتكاليف التحويلية", bases, format_func=ENTRY_BASES.get, horizontal=True,
+                     key=f"{k}_basis", index=bases.index(v.get("entry_basis") or ENTRY_PIECE),
+                     help="لإجمالي الطلبية: بتكتب الكميات والتكاليف للطلبية كلها والنظام بيقسمها على عدد القطع")
+    order = basis == ENTRY_ORDER
+    pieces = qty * ppu
+    if order and not pieces:
+        st.info("اكتب الكمية المطلوبة الأول عشان الإجماليات تتقسم على عدد القطع")
+    factor = pieces if order else 1.0
+    st.markdown(f"##### الخامات {'للطلبية كلها' if order else 'للقطعة'}")
+    if order and pieces:
+        st.caption(f"الإجماليات بتتقسم على {pieces:,.0f} قطعة. تغيير طريقة الإدخال بيرجّع الجدول لأول قيمه.")
     if quote:
         base = quote["lines"]
         snapshot = {l["component_id"]: l for l in quote["lines"]}
         refresh = st.checkbox("تحديث أسعار المتوسط وآخر سعر من المخزن النهارده", key=f"{k}_refresh",
                               help="من غير العلامة الإصدار الجديد بياخد نفس أسعار الإصدار اللي قبله")
     else:
-        base = [{"component_id": l["component_id"], "qty": l["qty"], "manual_price": l["manual"]}
-                for l in defaults["lines"]]
+        base = [{"component_id": l["component_id"], "qty": l["qty"], "manual_price": l["manual"],
+                 "in_grams": boms.grams_per_unit(l["unit"]) is not None} for l in defaults["lines"]]
         snapshot, refresh = {}, True
         if not defaults["has_bom"]:
             st.info("المنتج ملهوش تركيبة؛ ضيف خاماته هنا، أو سجّل التركيبة من شاشة التركيبات عشان تتملى تلقائي.")
     comp_opts = {i: lbl for i, lbl in items.item_options().items() if i != item_id}
-    lines = _priced(_lines_editor(f"{k}_lines", base, comp_opts), snapshot, refresh)
+    typed = _lines_editor(f"{k}_lines_{basis}", base, comp_opts, factor, order) if factor else []
+    lines = _priced(typed, snapshot, refresh)
     if lines:
-        view = pd.DataFrame([{"الخامة": l["name"], "الكمية": l["qty"], "الوحدة": l["unit"],
+        view = pd.DataFrame([{"الخامة": l["name"], "الكمية للقطعة": l["qty"], "الوحدة": l["unit"],
                               "المتوسط": l["wac_price"], "آخر سعر": l["last_price"], "يدوي": l["manual_price"]}
                              for l in lines])
         st.dataframe(view, hide_index=True, width="stretch",
-                     column_config={c: PRICE for c in ("الكمية", "المتوسط", "آخر سعر", "يدوي")})
+                     column_config={c: PRICE for c in ("الكمية للقطعة", "المتوسط", "آخر سعر", "يدوي")})
 
     rates = cost_rates.rates_on(quote_date)
-    st.markdown("##### التكاليف التحويلية للقطعة")
-    conv = {}
-    for col, (comp, field) in zip(st.columns(4), CONV):
-        default = v[field] if field in v else rates.get(comp, {}).get("value", 0.0)
-        conv[field] = col.number_input(cost_rates.RATE_COMPONENTS[comp], min_value=0.0, value=float(default),
-                                       format="%.4f", key=f"{k}_{field}")
+    st.markdown(f"##### التكاليف التحويلية {'للطلبية كلها' if order else 'للقطعة'}")
+    conv = {field: 0.0 for _, field in CONV}
+    for col, (comp, field) in zip(st.columns(4), CONV if factor else ()):
+        per_piece = v[field] if field in v else rates.get(comp, {}).get("value", 0.0)
+        conv_key = f"{k}_{field}_{basis}"
+        if conv_key not in st.session_state:
+            # Set once, so a later change in order quantity keeps the typed totals and re-divides them.
+            st.session_state[conv_key] = float(per_piece) * factor
+        typed_conv = col.number_input(cost_rates.RATE_COMPONENTS[comp], min_value=0.0, format="%.4f", key=conv_key)
+        conv[field] = typed_conv / factor
+    if order and pieces:
+        st.caption("للقطعة: " + " · ".join(f"{cost_rates.RATE_COMPONENTS[c]} {conv[f]:,.4f}" for c, f in CONV))
     if not quote and not any(c in rates for c, _ in CONV):
         st.caption("مفيش معدلات تحميل مسجلة؛ سجّلها من شاشة معدلات التحميل عشان تتملى تلقائي.")
 
@@ -171,7 +212,7 @@ def _form(user, quote: dict | None, key: str) -> None:
     notes = c19.text_input("ملاحظات", value=v.get("notes") or "", key=f"{k}_notes")
 
     data = {"quote_date": quote_date, "party_id": party_id, "item_id": item_id, "qty": qty, "pieces_per_unit": ppu,
-            "piece_weight_g": weight or None, "method": method, "waste_pct": waste, **conv, "mold_mode": mold_mode,
+            "piece_weight_g": weight or None, "method": method, "entry_basis": basis, "waste_pct": waste, **conv, "mold_mode": mold_mode,
             "mold_name": mold_name, "mold_cost": mold_cost, "mold_life_pieces": mold_life, "ga_basis": ga_basis,
             "ga_value": ga_value, "selling_basis": sell_basis, "selling_value": sell_value, "margin_pct": margin,
             "offered_price": offered or None, "notes": notes, "lines": lines}

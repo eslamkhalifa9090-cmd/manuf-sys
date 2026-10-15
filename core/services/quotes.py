@@ -11,14 +11,15 @@ from sqlalchemy import func, select
 
 from core.db import session_scope
 from core.models import Item, Party, PriceQuote, PriceQuoteLine, User
-from core.models.costing import (BASES, LAST, MANUAL, METHODS, MOLD_LIFE, MOLD_MODES, MOLD_NONE, MOLD_ORDER, PCT,
+from core.models.costing import (BASES, ENTRY_BASES, ENTRY_PIECE, LAST, MANUAL, METHODS, MOLD_LIFE, MOLD_MODES, MOLD_NONE, MOLD_ORDER, PCT,
                                  Q_ACCEPTED, Q_DRAFT, QUOTE_STATUSES, WAC)
 from core.services import audit
 from core.services.errors import BusinessError
 
 SCREEN = "pricing"
 CONV_FIELDS = ("wages", "energy", "maintenance", "other")
-COPY_FIELDS = ("quote_date", "party_id", "item_id", "qty", "pieces_per_unit", "piece_weight_g", "method", "waste_pct",
+COPY_FIELDS = ("quote_date", "party_id", "item_id", "qty", "pieces_per_unit", "piece_weight_g", "method", "entry_basis",
+               "waste_pct",
                *CONV_FIELDS, "mold_mode", "mold_name", "mold_cost", "mold_life_pieces", "ga_basis", "ga_value",
                "selling_basis", "selling_value", "margin_pct", "offered_price", "notes")
 PRICE_FIELD = {WAC: "wac_price", LAST: "last_price", MANUAL: "manual_price"}
@@ -91,6 +92,8 @@ def _validate(data: dict) -> None:
         raise BusinessError("هامش الربح لازم يكون بين 0 و أقل من 100%")
     if not 0 <= _f(data.get("waste_pct")) < 100:
         raise BusinessError("نسبة الهالك لازم تكون بين 0 و 100")
+    if (data.get("entry_basis") or ENTRY_PIECE) not in ENTRY_BASES:
+        raise BusinessError("طريقة الإدخال غير معروفة")
     if data.get("method") not in METHODS:
         raise BusinessError("اختار طريقة التسعير")
     if data.get("mold_mode") not in MOLD_MODES:
@@ -114,10 +117,13 @@ def _fill(q: PriceQuote, data: dict) -> None:
             v = (v or "").strip() or None
         elif f in ("piece_weight_g", "offered_price"):
             v = _f(v) or None
+        elif f == "entry_basis":
+            v = v or ENTRY_PIECE
         elif f not in ("party_id", "item_id", "quote_date", "method", "mold_mode", "ga_basis", "selling_basis"):
             v = _f(v)
         setattr(q, f, v)
-    q.lines = [PriceQuoteLine(component_id=l["component_id"], qty=_f(l["qty"]), wac_price=_f(l.get("wac_price")),
+    q.lines = [PriceQuoteLine(component_id=l["component_id"], qty=_f(l["qty"]), in_grams=bool(l.get("in_grams")),
+                              wac_price=_f(l.get("wac_price")),
                               last_price=_f(l.get("last_price")), manual_price=_f(l.get("manual_price")))
                for l in data["lines"] if l.get("component_id") and _f(l.get("qty")) > 0]
 
@@ -197,7 +203,8 @@ def _as_dict(q: PriceQuote, s) -> dict:
               "is_current": q.is_current, "item_name": q.item.name, "item_code": q.item.code, "unit": q.item.unit,
               "party_name": party.name if party else "", "created_at": q.created_at,
               "lines": [{"component_id": l.component_id, "name": l.component.name, "unit": l.component.unit,
-                         "qty": _f(l.qty), "wac_price": _f(l.wac_price), "last_price": _f(l.last_price),
+                         "qty": _f(l.qty), "in_grams": bool(l.in_grams), "wac_price": _f(l.wac_price),
+                         "last_price": _f(l.last_price),
                          "manual_price": _f(l.manual_price)} for l in q.lines]})
     return d
 
@@ -250,13 +257,15 @@ def cost_card(d: dict) -> pd.DataFrame:
     """Per-piece cost card: materials then each cost element, one column per method."""
     res = calc(d)
     cols = [METHODS[m] for m in PRICE_FIELD]
+    pieces = res[WAC]["pieces"]
     rows = []
     for l in d["lines"]:
         rows.append({"البند": l["name"], "الكمية للقطعة": f"{l['qty']:.4f} {l['unit']}",
+                     "الكمية للطلبية": f"{l['qty'] * pieces:,.3f} {l['unit']}",
                      **{METHODS[m]: l["qty"] * l[PRICE_FIELD[m]] for m in PRICE_FIELD}})
 
     def add(label, key, extra=""):
-        rows.append({"البند": label, "الكمية للقطعة": extra, **{METHODS[m]: res[m][key] for m in PRICE_FIELD}})
+        rows.append({"البند": label, "الكمية للقطعة": extra, "الكمية للطلبية": "", **{METHODS[m]: res[m][key] for m in PRICE_FIELD}})
 
     add("إجمالي الخامات", "materials")
     add("تكاليف تحويلية (أجور وطاقة وصيانة وأخرى)", "conversion")
@@ -274,7 +283,7 @@ def cost_card(d: dict) -> pd.DataFrame:
     if d.get("piece_weight_g"):
         add("السعر المقترح للكيلو", "price_kg", f"وزن القطعة {_f(d['piece_weight_g']):g} جم")
     add("قيمة الطلبية بالسعر المقترح", "order_value", f"{res[WAC]['pieces']:g} قطعة")
-    df = pd.DataFrame(rows, columns=["البند", "الكمية للقطعة", *cols])
+    df = pd.DataFrame(rows, columns=["البند", "الكمية للقطعة", "الكمية للطلبية", *cols])
     for c in cols:
         df[c] = df[c].astype(float).round(4)
     return df

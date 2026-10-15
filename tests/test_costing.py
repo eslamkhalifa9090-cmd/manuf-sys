@@ -172,3 +172,15 @@ def test_quote_validation_and_permissions(x, clerk):
         boms.save_bom(clerk, x["shoe"], [{"component_id": x["oil"], "qty": 1, "in_grams": True}])
     with pytest.raises(BusinessError, match="صلاحية"):
         cost_rates.save_rate(clerk, SELLING, 1, D)
+
+
+def test_quote_keeps_entry_basis_and_grams_flag(x):
+    lines = [{"component_id": x["compound"], "qty": 0.2, "in_grams": True, "wac_price": 40, "last_price": 45,
+              "manual_price": 50}]
+    q = quotes.save_quote(x["m"], None, quote_data(x, entry_basis="order", lines=lines))
+    d = quotes.get_quote(q)
+    assert d["entry_basis"] == "order" and d["lines"][0]["in_grams"] is True
+    card = quotes.cost_card(d)
+    assert card["الكمية للطلبية"].iloc[0] == "200.000 كيلو"  # 0.2 kg x 1000 pieces
+    with pytest.raises(BusinessError, match="طريقة الإدخال"):
+        quotes.save_quote(x["m"], None, quote_data(x, entry_basis="batch"))
