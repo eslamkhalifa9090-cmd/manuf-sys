@@ -27,12 +27,14 @@ def get_engine(url: str | None = None):
     """Return the process-wide engine, creating it on first use."""
     global _engine, _SessionLocal
     if _engine is None or url is not None:
-        url = url or config.DB_URL
-        if url.startswith("sqlite:///"):
-            config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        _engine = create_engine(url, future=True)
+        url = config.normalize_db_url(url) if url else config.db_url()
         if url.startswith("sqlite"):
+            config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _engine = create_engine(url)
             event.listen(_engine, "connect", _sqlite_pragmas)
+        else:
+            # Hosted Postgres (e.g. Neon) closes idle connections; check and recycle them.
+            _engine = create_engine(url, pool_pre_ping=True, pool_recycle=300, pool_size=5, max_overflow=5)
         _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
 

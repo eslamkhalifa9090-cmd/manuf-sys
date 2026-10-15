@@ -2,7 +2,7 @@
 
 نظام إدارة الحسابات والتكاليف والدورة الإنتاجية لمصنع منتجات الرابر (Rubber Manufacturing System).
 
-**Python · Streamlit · SQLAlchemy · SQLite**
+**Python · Streamlit · SQLAlchemy · PostgreSQL / SQLite**
 
 ## التشغيل
 
@@ -18,10 +18,31 @@ streamlit run app.py
 - للتشغيل على شبكة المصنع: `streamlit run app.py --server.address 0.0.0.0` والمستخدمين يفتحوا `http://IP-الجهاز:8501`.
 - النسخ الاحتياطي من شاشة **إدارة النظام** (للـ Master Admin فقط).
 
+## التشغيل على Streamlit Community Cloud (من المتصفح)
+
+Streamlit Cloud بيمسح الملفات المحلية مع كل إعادة تشغيل، فلازم قاعدة البيانات تكون **PostgreSQL خارجية** وإلا البيانات هتضيع.
+
+1. **قاعدة البيانات (Neon، مجاني):**
+   - ادخل [neon.tech](https://neon.tech) واعمل حساب، ثم **New Project** (اختار أقرب Region، مثلاً Frankfurt).
+   - من **Connection Details** انسخ الـ Connection string، شكله:
+     `postgresql://USER:PASSWORD@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require`
+2. **التطبيق:**
+   - ادخل [share.streamlit.io](https://share.streamlit.io) ← **Create app** ← اختار الريبو `manuf-sys`، الـ Branch `main`، الملف `app.py`.
+   - قبل Deploy افتح **Advanced settings** ← **Secrets** والصق:
+     ```toml
+     MANUF_DB_URL = "postgresql://USER:PASSWORD@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+     ```
+   - اضغط **Deploy**. أول فتح هيطلب إنشاء حساب الـ Master Admin، والجداول وشجرة الحسابات بتتعمل تلقائياً.
+3. **الخصوصية:** من **Settings ← Sharing** خلّي التطبيق **Only specific people can view this app** وضيف إيميلات المستخدمين.
+
+المتغير `MANUF_DB_URL` ممكن يتحط كـ Environment variable بدل الـ Secrets. لو مش موجود، النظام بيستخدم SQLite محلي (مناسب للتشغيل على جهاز واحد أو للتجربة).
+
 ## الاختبارات
 
 ```bash
 python -m pytest
+# على PostgreSQL:
+MANUF_TEST_DB_URL="postgresql://user:pass@localhost/test_db" python -m pytest
 ```
 
 ## السياسات المحاسبية الثابتة
